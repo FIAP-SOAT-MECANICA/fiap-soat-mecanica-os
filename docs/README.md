@@ -13,6 +13,7 @@ causa da aplicação.
 | Documento | Assunto |
 | --- | --- |
 | [RFC-001](rfc/RFC-001-api-eks-learner-lab.md) | Implantar a API no EKS do AWS Academy Learner Lab: imagem imutável, pipeline, segredos, gateway, observabilidade, contrato com os repos #1, #2 e #3, alternativas, custo, validação e riscos |
+| [RFC-002](rfc/RFC-002-decomposicao-os-service.md) | Decompor o monolito em OS, Execução e Billing: fronteiras, banco por serviço, organização do código, envelope e contrato de mensagens, Saga orquestrada, alternativas e questões em aberto |
 
 ## ADRs
 
