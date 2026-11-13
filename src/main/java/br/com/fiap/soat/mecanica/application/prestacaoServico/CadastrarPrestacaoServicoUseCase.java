@@ -1,6 +1,7 @@
 package br.com.fiap.soat.mecanica.application.prestacaoServico;
 
 import br.com.fiap.soat.mecanica.application.ordemServico.usecase.NotificarAlteracaoSituacaoOrdemServicoUseCase;
+import br.com.fiap.soat.mecanica.application.servico.BuscarServicoPorIdUseCase;
 import br.com.fiap.soat.mecanica.domain.enums.SituacaoOrdemServicoEnum;
 import br.com.fiap.soat.mecanica.domain.exception.RecursoNaoEncontradoException;
 import br.com.fiap.soat.mecanica.domain.exception.RegraNegocioException;
@@ -9,7 +10,6 @@ import br.com.fiap.soat.mecanica.domain.ordemServico.OrdemServicoRepository;
 import br.com.fiap.soat.mecanica.domain.prestacaoServico.PrestacaoServico;
 import br.com.fiap.soat.mecanica.domain.prestacaoServico.PrestacaoServicoRepository;
 import br.com.fiap.soat.mecanica.domain.servico.Servico;
-import br.com.fiap.soat.mecanica.domain.servico.ServicoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,15 +22,15 @@ import java.util.UUID;
 public class CadastrarPrestacaoServicoUseCase {
 
     private final PrestacaoServicoRepository prestacaoServicoRepository;
-    private final ServicoRepository servicoRepository;
     private final OrdemServicoRepository ordemServicoRepository;
     private final NotificarAlteracaoSituacaoOrdemServicoUseCase notificarAlteracaoSituacaoOrdemServicoUseCase;
+    private final BuscarServicoPorIdUseCase buscarServicoPorIdUseCase;
+
 
     @Transactional
     public PrestacaoServico executar(BigDecimal precoMaoDeObra, UUID ordemServicoId, UUID servicoId) {
 
-        Servico servico = servicoRepository.buscarPorId(servicoId)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Serviço não encontrado"));
+        Servico servico = buscarServicoPorIdUseCase.executar(servicoId);
 
         OrdemServico ordemServico = ordemServicoRepository.buscarPorId(ordemServicoId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Ordem Serviço não encontrado"));
