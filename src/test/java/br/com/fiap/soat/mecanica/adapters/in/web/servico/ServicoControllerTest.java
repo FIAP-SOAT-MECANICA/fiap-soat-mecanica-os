@@ -125,6 +125,27 @@ class ServicoControllerTest {
     }
 
     @Test
+    @WithMockUser(authorities = "SCOPE_servicos:ler")
+    @DisplayName("Deve buscar serviço por Id com o escopo do Execução")
+    void deveBuscar_quandoEscopoServicosLer() throws Exception {
+        Servico servico = TestDataFactory.criarServicoValido();
+        when(buscarServicoPorIdUseCase.executar(any())).thenReturn(servico);
+
+        mockMvc.perform(get("/servicos/{id}", servico.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nome").value("Troca de Óleo"))
+                .andExpect(jsonPath("$.statusRecursoEnum").value("ATIVO"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "SCOPE_clientes:situacao:ler")
+    @DisplayName("Deve negar busca de serviço para o escopo da Lambda")
+    void deveNegar_quandoEscopoDeOutroServico() throws Exception {
+        mockMvc.perform(get("/servicos/{id}", UUID.randomUUID()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     @WithMockUser(roles = "MECANICO")
     @DisplayName("Deve retornar 404 quando serviço não existe")
     void deveRetornar404_quandoServicoNaoExiste() throws Exception {

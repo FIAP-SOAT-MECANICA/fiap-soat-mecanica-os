@@ -77,7 +77,7 @@ public class ServicoController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('MECANICO')")
+    @PreAuthorize("hasAuthority('SCOPE_servicos:ler') or hasRole('MECANICO')")
     @Operation(summary = "Buscar um serviço por Id")
     public ResponseEntity<ServicoResponse> buscarPorId(@PathVariable UUID id) {
         return ResponseEntity.ok(
