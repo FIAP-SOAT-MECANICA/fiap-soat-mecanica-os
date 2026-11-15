@@ -1,13 +1,10 @@
 package br.com.fiap.soat.mecanica.util;
 
-import br.com.fiap.soat.mecanica.domain.alocacaoPecas.AlocacaoPeca;
 import br.com.fiap.soat.mecanica.domain.cliente.Cliente;
 import br.com.fiap.soat.mecanica.domain.enums.CargoEnum;
 import br.com.fiap.soat.mecanica.domain.enums.SituacaoOrdemServicoEnum;
 import br.com.fiap.soat.mecanica.domain.enums.StatusRecursoEnum;
 import br.com.fiap.soat.mecanica.domain.ordemServico.OrdemServico;
-import br.com.fiap.soat.mecanica.domain.peca.Peca;
-import br.com.fiap.soat.mecanica.domain.prestacaoServico.PrestacaoServico;
 import br.com.fiap.soat.mecanica.domain.servico.Servico;
 import br.com.fiap.soat.mecanica.domain.usuario.Usuario;
 import br.com.fiap.soat.mecanica.domain.valueobject.*;
@@ -98,17 +95,6 @@ public class TestDataFactory {
                 "2023",
                 2,
                 UUID.randomUUID()
-        );
-    }
-
-    public static Peca criarPecaValida() {
-        return Peca.reconstruir(
-                UUID.randomUUID(),
-                StatusRecursoEnum.ATIVO,
-                "Pastilha de Freio",
-                "Bosch",
-                new BigDecimal("150.00"),
-                10
         );
     }
 
@@ -237,78 +223,6 @@ public class TestDataFactory {
                 null,
                 BigDecimal.ZERO,
                 "Observação teste",
-                UUID.randomUUID(),
-                UUID.randomUUID()
-        );
-    }
-
-    public static PrestacaoServico criarPrestacaoServicoValida() {
-        return PrestacaoServico.reconstruir(
-                UUID.randomUUID(),
-                StatusRecursoEnum.ATIVO,
-                new BigDecimal("200.00"),
-                new BigDecimal("200.00"),
-                null,
-                null,
-                UUID.randomUUID(),
-                UUID.randomUUID()
-        );
-    }
-
-    public static PrestacaoServico criarPrestacaoServicoIniciada() {
-        return PrestacaoServico.reconstruir(
-                UUID.randomUUID(),
-                StatusRecursoEnum.ATIVO,
-                new BigDecimal("200.00"),
-                new BigDecimal("200.00"),
-                LocalDateTime.now(),
-                null,
-                UUID.randomUUID(),
-                UUID.randomUUID()
-        );
-    }
-
-    public static PrestacaoServico criarPrestacaoServicoFinalizada() {
-        return PrestacaoServico.reconstruir(
-                UUID.randomUUID(),
-                StatusRecursoEnum.ATIVO,
-                new BigDecimal("200.00"),
-                new BigDecimal("200.00"),
-                LocalDateTime.now().minusHours(2),
-                LocalDateTime.now(),
-                UUID.randomUUID(),
-                UUID.randomUUID()
-        );
-    }
-
-    public static PrestacaoServico criarPrestacaoServicoInativa() {
-        return PrestacaoServico.reconstruir(
-                UUID.randomUUID(),
-                StatusRecursoEnum.INATIVO,
-                new BigDecimal("200.00"),
-                new BigDecimal("200.00"),
-                null,
-                null,
-                UUID.randomUUID(),
-                UUID.randomUUID()
-        );
-    }
-
-    public static AlocacaoPeca criarAlocacaoPecaValida() {
-        return AlocacaoPeca.reconstruir(
-                UUID.randomUUID(),
-                StatusRecursoEnum.ATIVO,
-                2,
-                UUID.randomUUID(),
-                UUID.randomUUID()
-        );
-    }
-
-    public static AlocacaoPeca criarAlocacaoPecaInativa() {
-        return AlocacaoPeca.reconstruir(
-                UUID.randomUUID(),
-                StatusRecursoEnum.INATIVO,
-                2,
                 UUID.randomUUID(),
                 UUID.randomUUID()
         );

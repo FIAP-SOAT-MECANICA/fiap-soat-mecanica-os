@@ -303,32 +303,8 @@ class OrdemServicoTest {
     }
 
     @Nested
-    @DisplayName("Validações de prestação de serviço")
-    class ValidacoesPrestacao {
-
-        @Test
-        @DisplayName("Deve permitir cadastrar prestação quando RECEBIDA")
-        void devePermitir_quandoRecebida() {
-            OrdemServico os = TestDataFactory.criarOrdemServicoRecebida();
-            os.validarPermiteCadastrarPrestacaoServico();
-            assertThat(os.isRecebida()).isTrue();
-        }
-
-        @Test
-        @DisplayName("Deve permitir cadastrar prestação quando EM_DIAGNOSTICO")
-        void devePermitir_quandoEmDiagnostico() {
-            OrdemServico os = TestDataFactory.criarOrdemServicoEmDiagnostico();
-            os.validarPermiteCadastrarPrestacaoServico();
-            assertThat(os.isEmDiagnostico()).isTrue();
-        }
-
-        @Test
-        @DisplayName("Deve lançar exceção quando não permite cadastrar prestação")
-        void deveLancarExcecao_quandoNaoPermiteCadastrar() {
-            OrdemServico os = TestDataFactory.criarOrdemServicoEmExecucao();
-            assertThatThrownBy(os::validarPermiteCadastrarPrestacaoServico)
-                    .isInstanceOf(RegraNegocioException.class);
-        }
+    @DisplayName("Validações de diagnóstico")
+    class ValidacoesDiagnostico {
 
         @Test
         @DisplayName("Deve validar que permite alterar diagnóstico")

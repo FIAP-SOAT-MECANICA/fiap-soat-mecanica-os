@@ -190,13 +190,6 @@ public class OrdemServico extends Principal {
         return this.situacao == SituacaoOrdemServicoEnum.FINALIZADA;
     }
 
-    public void validarPermiteCadastrarPrestacaoServico() {
-        validarAtiva();
-
-        if (!isRecebida() && !isEmDiagnostico())
-            throw new RegraNegocioException("Ordem de serviço não permite cadastro de prestação de serviço");
-    }
-
     public void validarPermiteAlterarDiagnostico() {
         validarAtiva();
 

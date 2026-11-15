@@ -2,8 +2,6 @@ package br.com.fiap.soat.mecanica.adapters.in.web.ordemServico;
 
 import br.com.fiap.soat.mecanica.adapters.in.web.security.CustomUserDetailsService;
 import br.com.fiap.soat.mecanica.adapters.out.security.JwtService;
-import br.com.fiap.soat.mecanica.application.ordemServico.dto.TempoMedioOSResult;
-import br.com.fiap.soat.mecanica.application.ordemServico.dto.TempoMedioServicoResult;
 import br.com.fiap.soat.mecanica.application.ordemServico.dto.Pagina;
 import br.com.fiap.soat.mecanica.application.ordemServico.usecase.*;
 import br.com.fiap.soat.mecanica.config.SecurityConfig;
@@ -43,21 +41,15 @@ class OrdemServicoControllerTest {
     @MockitoBean
     private EnviarOrdemServicoParaAprovacaoUseCase enviarAprovacaoUseCase;
     @MockitoBean
-    private IniciarExecucaoOrdemServicoUseCase iniciarExecucaoUseCase;
-    @MockitoBean
     private VoltarOrdemServicoParaDiagnosticoUseCase voltarDiagnosticoUseCase;
     @MockitoBean
     private CancelarOrdemServicoPorDesistenciaUseCase cancelarUseCase;
     @MockitoBean
     private PagarEEntregarOrdemServicoUseCase pagarEntregarUseCase;
     @MockitoBean
-    private ConsultarTempoMedioOSUseCase consultarTempoMedioUseCase;
-    @MockitoBean
     private BuscarTodosOrdemServicoPorVeiculoPlacaUseCase buscarTodosPorPlacaUseCase;
     @MockitoBean
     private ListarOrdensServicoAtivasUseCase listarOrdensServicoAtivasUseCase;
-    @MockitoBean
-    private AbrirOrdemServicoUseCase abrirOrdemServicoUseCase;
     @MockitoBean
     private AprovarOrcamentoUseCase aprovarOrcamentoUseCase;
     @MockitoBean
@@ -167,17 +159,6 @@ class OrdemServicoControllerTest {
 
     @Test
     @WithMockUser(roles = "MECANICO")
-    @DisplayName("Deve iniciar execucao da OS")
-    void deveIniciarExecucao() throws Exception {
-        OrdemServico os = TestDataFactory.criarOrdemServicoEmExecucao();
-        when(iniciarExecucaoUseCase.executar(any())).thenReturn(os);
-
-        mockMvc.perform(patch("/ordem-servicos/{id}/iniciar-execucao", os.getId()).with(csrf()))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    @WithMockUser(roles = "MECANICO")
     @DisplayName("Deve enviar OS para aguardar aprovacao")
     void deveEnviarParaAguardarAprovacao() throws Exception {
         OrdemServico os = TestDataFactory.criarOrdemServicoAguardandoAprovacao();
@@ -207,66 +188,6 @@ class OrdemServicoControllerTest {
 
         mockMvc.perform(patch("/ordem-servicos/{id}/cancelar", os.getId()).with(csrf()))
                 .andExpect(status().isOk());
-    }
-
-    @Test
-    @WithMockUser(roles = "MECANICO")
-    @DisplayName("Deve buscar tempo medio dos servicos")
-    void deveBuscarTempoMedioDosServicos() throws Exception {
-        TempoMedioOSResult result = new TempoMedioOSResult(
-                List.of(new TempoMedioServicoResult("Troca de oleo", 3600.0)),
-                3600.0
-        );
-        when(consultarTempoMedioUseCase.executar(any())).thenReturn(result);
-
-        mockMvc.perform(get("/ordem-servicos/{id}/tempo-medio", UUID.randomUUID()))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    @WithMockUser(roles = "MECANICO")
-    @DisplayName("Deve abrir OS com serviços e peças")
-    void deveAbrirOS_comServicosEPecas() throws Exception {
-        OrdemServico os = TestDataFactory.criarOrdemServicoEmDiagnostico();
-        when(abrirOrdemServicoUseCase.executar(any(), any(), any())).thenReturn(os);
-
-        String json = """
-                {
-                  "veiculoId": "%s",
-                  "observacao": "Revisão completa",
-                  "servicos": [
-                    {
-                      "servicoId": "%s",
-                      "precoMaoDeObra": 150.00,
-                      "pecas": [
-                        { "pecaId": "%s", "quantidade": 2 }
-                      ]
-                    }
-                  ]
-                }
-                """.formatted(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
-
-        mockMvc.perform(post("/ordem-servicos/abrir")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json).with(csrf()))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    @WithMockUser(roles = "MECANICO")
-    @DisplayName("Deve retornar 400 ao abrir OS sem serviços")
-    void deveRetornar400_quandoAbrirOSSemServicos() throws Exception {
-        String json = """
-                {
-                  "veiculoId": "%s",
-                  "servicos": []
-                }
-                """.formatted(UUID.randomUUID());
-
-        mockMvc.perform(post("/ordem-servicos/abrir")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json).with(csrf()))
-                .andExpect(status().isBadRequest());
     }
 
     @Test

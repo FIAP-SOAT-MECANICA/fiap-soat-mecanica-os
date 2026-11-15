@@ -51,18 +51,6 @@ public final class DatabaseTestFixtures {
         return id;
     }
 
-    public static UUID insertPeca(JdbcTemplate jdbcTemplate) {
-        UUID id = UUID.randomUUID();
-        jdbcTemplate.update("""
-                INSERT INTO pecas (id, status, nome, marca, valor_unitario, quantidade_estoque)
-                VALUES (?, 'ATIVO', ?, 'Fixture', ?, 10)
-                """,
-                id,
-                "Peca " + shortId(id),
-                new BigDecimal("10.00"));
-        return id;
-    }
-
     public static UUID insertServico(JdbcTemplate jdbcTemplate) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update("""
@@ -89,20 +77,6 @@ public final class DatabaseTestFixtures {
         return id;
     }
 
-    public static UUID insertPrestacaoServico(JdbcTemplate jdbcTemplate, UUID ordemServicoId, UUID servicoId) {
-        UUID id = UUID.randomUUID();
-        jdbcTemplate.update("""
-                INSERT INTO prestacao_servicos (id, status, preco_mdo, subtotal, ordem_servico_id, servico_id)
-                VALUES (?, 'ATIVO', ?, ?, ?, ?)
-                """,
-                id,
-                new BigDecimal("100.00"),
-                new BigDecimal("100.00"),
-                ordemServicoId,
-                servicoId);
-        return id;
-    }
-
     public static VeiculoDependencies insertVeiculoDependencies(JdbcTemplate jdbcTemplate) {
         UUID usuarioId = insertUsuario(jdbcTemplate);
         UUID clienteId = insertCliente(jdbcTemplate, usuarioId);
@@ -116,38 +90,6 @@ public final class DatabaseTestFixtures {
                 veiculoDependencies.usuarioId(),
                 veiculoDependencies.clienteId(),
                 veiculoId);
-    }
-
-    public static PrestacaoServicoDependencies insertPrestacaoServicoDependencies(JdbcTemplate jdbcTemplate) {
-        OrdemServicoDependencies ordemServicoDependencies = insertOrdemServicoDependencies(jdbcTemplate);
-        UUID ordemServicoId = insertOrdemServico(
-                jdbcTemplate,
-                ordemServicoDependencies.veiculoId(),
-                ordemServicoDependencies.usuarioId());
-        UUID servicoId = insertServico(jdbcTemplate);
-        return new PrestacaoServicoDependencies(
-                ordemServicoDependencies.usuarioId(),
-                ordemServicoDependencies.clienteId(),
-                ordemServicoDependencies.veiculoId(),
-                ordemServicoId,
-                servicoId);
-    }
-
-    public static AlocacaoPecaDependencies insertAlocacaoPecaDependencies(JdbcTemplate jdbcTemplate) {
-        PrestacaoServicoDependencies prestacaoServicoDependencies = insertPrestacaoServicoDependencies(jdbcTemplate);
-        UUID prestacaoServicoId = insertPrestacaoServico(
-                jdbcTemplate,
-                prestacaoServicoDependencies.ordemServicoId(),
-                prestacaoServicoDependencies.servicoId());
-        UUID pecaId = insertPeca(jdbcTemplate);
-        return new AlocacaoPecaDependencies(
-                prestacaoServicoDependencies.usuarioId(),
-                prestacaoServicoDependencies.clienteId(),
-                prestacaoServicoDependencies.veiculoId(),
-                prestacaoServicoDependencies.ordemServicoId(),
-                prestacaoServicoDependencies.servicoId(),
-                prestacaoServicoId,
-                pecaId);
     }
 
     private static String shortId(UUID id) {
@@ -187,23 +129,5 @@ public final class DatabaseTestFixtures {
     }
 
     public record OrdemServicoDependencies(UUID usuarioId, UUID clienteId, UUID veiculoId) {
-    }
-
-    public record PrestacaoServicoDependencies(
-            UUID usuarioId,
-            UUID clienteId,
-            UUID veiculoId,
-            UUID ordemServicoId,
-            UUID servicoId) {
-    }
-
-    public record AlocacaoPecaDependencies(
-            UUID usuarioId,
-            UUID clienteId,
-            UUID veiculoId,
-            UUID ordemServicoId,
-            UUID servicoId,
-            UUID prestacaoServicoId,
-            UUID pecaId) {
     }
 }
