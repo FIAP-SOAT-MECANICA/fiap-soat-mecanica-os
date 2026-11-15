@@ -39,21 +39,11 @@ class OrdemServicoControllerTest {
     @MockitoBean
     private BuscarOrdemServicoPorIdUseCase buscarPorIdUseCase;
     @MockitoBean
-    private EnviarOrdemServicoParaAprovacaoUseCase enviarAprovacaoUseCase;
-    @MockitoBean
-    private VoltarOrdemServicoParaDiagnosticoUseCase voltarDiagnosticoUseCase;
-    @MockitoBean
     private CancelarOrdemServicoPorDesistenciaUseCase cancelarUseCase;
-    @MockitoBean
-    private PagarEEntregarOrdemServicoUseCase pagarEntregarUseCase;
     @MockitoBean
     private BuscarTodosOrdemServicoPorVeiculoPlacaUseCase buscarTodosPorPlacaUseCase;
     @MockitoBean
     private ListarOrdensServicoAtivasUseCase listarOrdensServicoAtivasUseCase;
-    @MockitoBean
-    private AprovarOrcamentoUseCase aprovarOrcamentoUseCase;
-    @MockitoBean
-    private RecusarOrcamentoUseCase recusarOrcamentoUseCase;
     @MockitoBean
     private JwtService jwtService;
     @MockitoBean
@@ -148,67 +138,12 @@ class OrdemServicoControllerTest {
 
     @Test
     @WithMockUser(roles = "MECANICO")
-    @DisplayName("Deve pagar e entregar OS")
-    void devePagarEEntregar() throws Exception {
-        OrdemServico os = TestDataFactory.criarOrdemServicoEntregue();
-        when(pagarEntregarUseCase.executar(any())).thenReturn(os);
-
-        mockMvc.perform(patch("/ordem-servicos/{id}/pagar", os.getId()).with(csrf()))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    @WithMockUser(roles = "MECANICO")
-    @DisplayName("Deve enviar OS para aguardar aprovacao")
-    void deveEnviarParaAguardarAprovacao() throws Exception {
-        OrdemServico os = TestDataFactory.criarOrdemServicoAguardandoAprovacao();
-        when(enviarAprovacaoUseCase.executar(any())).thenReturn(os);
-
-        mockMvc.perform(patch("/ordem-servicos/{id}/enviar-para-aguardar-aprovacao", os.getId()).with(csrf()))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    @WithMockUser(roles = "MECANICO")
-    @DisplayName("Deve voltar OS para diagnostico")
-    void deveVoltarDiagnostico() throws Exception {
-        OrdemServico os = TestDataFactory.criarOrdemServicoEmDiagnostico();
-        when(voltarDiagnosticoUseCase.executar(any())).thenReturn(os);
-
-        mockMvc.perform(patch("/ordem-servicos/{id}/voltar-diagnostico", os.getId()).with(csrf()))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    @WithMockUser(roles = "MECANICO")
     @DisplayName("Deve cancelar OS")
     void deveCancelar() throws Exception {
         OrdemServico os = TestDataFactory.criarOrdemServicoInativa();
         when(cancelarUseCase.executar(any())).thenReturn(os);
 
         mockMvc.perform(patch("/ordem-servicos/{id}/cancelar", os.getId()).with(csrf()))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    @WithMockUser
-    @DisplayName("Deve aprovar orçamento — endpoint público")
-    void deveAprovarOrcamento() throws Exception {
-        OrdemServico os = TestDataFactory.criarOrdemServicoEmExecucao();
-        when(aprovarOrcamentoUseCase.executar(any())).thenReturn(os);
-
-        mockMvc.perform(patch("/ordem-servicos/{id}/aprovar-orcamento", os.getId()).with(csrf()))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    @WithMockUser
-    @DisplayName("Deve recusar orçamento — endpoint público")
-    void deveRecusarOrcamento() throws Exception {
-        OrdemServico os = TestDataFactory.criarOrdemServicoEmDiagnostico();
-        when(recusarOrcamentoUseCase.executar(any())).thenReturn(os);
-
-        mockMvc.perform(patch("/ordem-servicos/{id}/recusar-orcamento", os.getId()).with(csrf()))
                 .andExpect(status().isOk());
     }
 }

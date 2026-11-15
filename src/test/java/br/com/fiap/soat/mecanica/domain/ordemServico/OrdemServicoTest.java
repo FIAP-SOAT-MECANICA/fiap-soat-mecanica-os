@@ -7,7 +7,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,7 +30,6 @@ class OrdemServicoTest {
 
             // Assert
             assertThat(os.getSituacao()).isEqualTo(SituacaoOrdemServicoEnum.RECEBIDA);
-            assertThat(os.getValorTotal()).isEqualByComparingTo(BigDecimal.ZERO);
             assertThat(os.getDataRecebida()).isNotNull();
             assertThat(os.isAtivo()).isTrue();
         }
@@ -129,7 +127,6 @@ class OrdemServicoTest {
             // Assert
             assertThat(os.getSituacao()).isEqualTo(SituacaoOrdemServicoEnum.EM_EXECUCAO);
             assertThat(os.getDataExecucao()).isNotNull();
-            assertThat(os.getPago()).isFalse();
         }
 
         @Test
@@ -174,7 +171,6 @@ class OrdemServicoTest {
             // Assert
             assertThat(os.getSituacao()).isEqualTo(SituacaoOrdemServicoEnum.ENTREGUE);
             assertThat(os.getDataEntregue()).isNotNull();
-            assertThat(os.getPago()).isTrue();
         }
 
         @Test
@@ -238,67 +234,6 @@ class OrdemServicoTest {
             assertThatThrownBy(os::finalizar).isInstanceOf(RegraNegocioException.class);
             assertThatThrownBy(os::entregar).isInstanceOf(RegraNegocioException.class);
             assertThatThrownBy(os::cancelarPorDesistencia).isInstanceOf(RegraNegocioException.class);
-        }
-    }
-
-    @Nested
-    @DisplayName("Valores")
-    class Valores {
-
-        @Test
-        @DisplayName("Deve adicionar valor ao total")
-        void deveAdicionarValor_quandoValorPositivo() {
-            // Arrange
-            OrdemServico os = TestDataFactory.criarOrdemServicoRecebida();
-
-            // Act
-            os.adicionarValor(new BigDecimal("100.00"));
-
-            // Assert
-            assertThat(os.getValorTotal()).isEqualByComparingTo(new BigDecimal("100.00"));
-        }
-
-        @Test
-        @DisplayName("Deve remover valor do total")
-        void deveRemoverValor_quandoValorPositivo() {
-            // Arrange
-            OrdemServico os = TestDataFactory.criarOrdemServicoEmExecucao();
-            BigDecimal valorOriginal = os.getValorTotal();
-
-            // Act
-            os.removerValor(new BigDecimal("100.00"));
-
-            // Assert
-            assertThat(os.getValorTotal()).isEqualByComparingTo(valorOriginal.subtract(new BigDecimal("100.00")));
-        }
-
-        @Test
-        @DisplayName("Deve não deixar valor total negativo ao remover")
-        void deveManterZero_quandoRemoverMaisQueTotal() {
-            // Arrange
-            OrdemServico os = TestDataFactory.criarOrdemServicoRecebida();
-
-            // Act
-            os.removerValor(new BigDecimal("1000.00"));
-
-            // Assert
-            assertThat(os.getValorTotal()).isEqualByComparingTo(BigDecimal.ZERO);
-        }
-
-        @Test
-        @DisplayName("Deve lançar exceção quando valor é nulo")
-        void deveLancarExcecao_quandoValorNulo() {
-            OrdemServico os = TestDataFactory.criarOrdemServicoRecebida();
-            assertThatThrownBy(() -> os.adicionarValor(null))
-                    .isInstanceOf(RegraNegocioException.class);
-        }
-
-        @Test
-        @DisplayName("Deve lançar exceção quando valor é negativo")
-        void deveLancarExcecao_quandoValorNegativo() {
-            OrdemServico os = TestDataFactory.criarOrdemServicoRecebida();
-            assertThatThrownBy(() -> os.adicionarValor(new BigDecimal("-1")))
-                    .isInstanceOf(RegraNegocioException.class);
         }
     }
 

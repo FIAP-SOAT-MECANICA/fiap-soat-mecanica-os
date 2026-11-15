@@ -43,8 +43,6 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/usuarios").permitAll()
                         .requestMatchers(HttpMethod.GET, "/ordem-servicos/veiculo/placa/**").permitAll()
-                        .requestMatchers(HttpMethod.PATCH, "/ordem-servicos/*/aprovar-orcamento").permitAll()
-                        .requestMatchers(HttpMethod.PATCH, "/ordem-servicos/*/recusar-orcamento").permitAll()
                         // qualquer outra rota precisa de autenticação
                         .anyRequest().authenticated()
                 )

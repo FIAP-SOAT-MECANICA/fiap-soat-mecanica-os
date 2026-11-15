@@ -10,7 +10,6 @@ import br.com.fiap.soat.mecanica.domain.usuario.Usuario;
 import br.com.fiap.soat.mecanica.domain.valueobject.*;
 import br.com.fiap.soat.mecanica.domain.veiculo.Veiculo;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -114,8 +113,6 @@ public class TestDataFactory {
                 SituacaoOrdemServicoEnum.RECEBIDA,
                 LocalDateTime.now(),
                 null, null, null, null, null,
-                null,
-                BigDecimal.ZERO,
                 "Observação teste",
                 UUID.randomUUID(),
                 UUID.randomUUID()
@@ -130,8 +127,6 @@ public class TestDataFactory {
                 LocalDateTime.now(),
                 LocalDateTime.now(),
                 null, null, null, null,
-                null,
-                BigDecimal.ZERO,
                 "Observação teste",
                 UUID.randomUUID(),
                 UUID.randomUUID()
@@ -147,8 +142,6 @@ public class TestDataFactory {
                 LocalDateTime.now(),
                 LocalDateTime.now(),
                 null, null, null,
-                null,
-                BigDecimal.ZERO,
                 "Observação teste",
                 UUID.randomUUID(),
                 UUID.randomUUID()
@@ -165,8 +158,6 @@ public class TestDataFactory {
                 LocalDateTime.now(),
                 LocalDateTime.now(),
                 null, null,
-                false,
-                new BigDecimal("500.00"),
                 "Observação teste",
                 UUID.randomUUID(),
                 UUID.randomUUID()
@@ -184,8 +175,6 @@ public class TestDataFactory {
                 LocalDateTime.now(),
                 LocalDateTime.now(),
                 null,
-                false,
-                new BigDecimal("500.00"),
                 "Observação teste",
                 UUID.randomUUID(),
                 UUID.randomUUID()
@@ -203,8 +192,6 @@ public class TestDataFactory {
                 LocalDateTime.now(),
                 LocalDateTime.now(),
                 LocalDateTime.now(),
-                true,
-                new BigDecimal("500.00"),
                 "Observação teste",
                 UUID.randomUUID(),
                 UUID.randomUUID()
@@ -220,8 +207,6 @@ public class TestDataFactory {
                 LocalDateTime.now(),
                 LocalDateTime.now(),
                 null, null, null,
-                null,
-                BigDecimal.ZERO,
                 "Observação teste",
                 UUID.randomUUID(),
                 UUID.randomUUID()

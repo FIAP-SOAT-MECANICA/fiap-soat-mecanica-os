@@ -11,10 +11,8 @@ const v9 = {
   clientePfId: "33333333-3333-3333-3333-333333333333",
   clientePfCpf: "52998224725",
   veiculoId: "44444444-4444-4444-4444-444444444444",
-  pecaId: "55555555-5555-5555-5555-555555555555",
   servicoId: "77777777-7777-7777-7777-777777777777",
   ordemServicoId: "66666666-6666-6666-6666-666666666666",
-  prestacaoServicoId: "88888888-8888-8888-8888-888888888888",
 };
 
 const missingUuid = "00000000-0000-0000-0000-000000000001";
@@ -33,8 +31,6 @@ const state = {
   veiculo: null,
   servico: null,
   ordemServico: null,
-  prestacaoServico: null,
-  peca: null,
 };
 
 function pass(name) {
@@ -130,24 +126,6 @@ function assertEquals(name, actual, expected) {
   return false;
 }
 
-function decimal(value) {
-  return Number.parseFloat(value);
-}
-
-function assertDecimalEquals(name, actual, expected, precision = 2) {
-  const factor = 10 ** precision;
-  const normalizedActual = Math.round(decimal(actual) * factor) / factor;
-  const normalizedExpected = Math.round(decimal(expected) * factor) / factor;
-
-  if (normalizedActual === normalizedExpected) {
-    pass(name);
-    return true;
-  }
-
-  fail(name, normalizedExpected, normalizedActual, { actual, expected });
-  return false;
-}
-
 async function login(label, credential) {
   const result = await request("POST", "/auth/login", { body: credential });
   if (!expectStatus(`AUTH - login ${label}`, result, 200)) {
@@ -226,37 +204,6 @@ async function criarOrdemSmoke(nomeSufixo) {
     }),
   );
   assertHasId(`MECANICO - OS ${nomeSufixo} criada com id`, result.body);
-  return result.body;
-}
-
-async function criarPrestacaoSmoke(nomeSufixo, ordemServicoId, servicoId, precoMaoDeObra = 120.5) {
-  const result = await test(`MECANICO - POST /prestacao-servico para ${nomeSufixo}`, 200, () =>
-    request("POST", "/prestacao-servico", {
-      token: state.tokenMecanico,
-      body: {
-        precoMaoDeObra,
-        ordemServicoId,
-        servicoId,
-      },
-    }),
-  );
-  assertHasId(`MECANICO - prestacao ${nomeSufixo} criada com id`, result.body);
-  return result.body;
-}
-
-async function criarPecaSmoke(nomeSufixo, valorUnitario = 45.9, quantidadeEstoque = 8) {
-  const result = await test(`ALMOXARIFE - POST /pecas para ${nomeSufixo}`, 200, () =>
-    request("POST", "/pecas", {
-      token: state.tokenAlmoxarife,
-      body: {
-        nome: `Peca ${nomeSufixo} ${runId}`,
-        marca: "Bosch",
-        valorUnitario,
-        quantidadeEstoque,
-      },
-    }),
-  );
-  assertHasId(`ALMOXARIFE - peca ${nomeSufixo} criada com id`, result.body);
   return result.body;
 }
 
@@ -390,7 +337,6 @@ async function runAtendenteTests() {
 
 async function runMecanicoSetupTests() {
   const token = state.tokenMecanico;
-  const precoMaoDeObra = 180.5;
 
   const criarServico = await test("MECANICO - POST /servicos", 200, () =>
     request("POST", "/servicos", {
@@ -427,7 +373,8 @@ async function runMecanicoSetupTests() {
   state.ordemServico = criarOrdem.body;
   assertHasId("MECANICO - ordem de servico criada com id", state.ordemServico);
   assertEquals("MECANICO - OS criada como RECEBIDA", state.ordemServico?.situacao, "RECEBIDA");
-  assertDecimalEquals("MECANICO - OS criada com valorTotal zerado", state.ordemServico?.valorTotal, 0);
+  assertEquals("MECANICO - OS nao expoe valorTotal (dono do valor e o Billing)", "valorTotal" in (state.ordemServico ?? {}), false);
+  assertEquals("MECANICO - OS nao expoe pago (dono do pagamento e o Billing)", "pago" in (state.ordemServico ?? {}), false);
 
   const buscarOrdem = await test("MECANICO - GET /ordem-servicos/{id}", 200, () =>
     request("GET", `/ordem-servicos/${state.ordemServico?.id}`, { token }),
@@ -437,177 +384,10 @@ async function runMecanicoSetupTests() {
   await test("MECANICO - GET /ordem-servicos/veiculo/placa/{placa}", 200, () =>
     request("GET", `/ordem-servicos/veiculo/placa/${state.veiculo?.placa ?? "ABC1D23"}`, { token })
   );
-
-  await test("MECANICO - GET /ordem-servicos/{id}/tempo-medio", 200, () =>
-    request("GET", `/ordem-servicos/${state.ordemServico?.id}/tempo-medio`, { token }),
-  );
-
-  const criarPrestacao = await test("MECANICO - POST /prestacao-servico", 200, () =>
-    request("POST", "/prestacao-servico", {
-      token,
-      body: {
-        precoMaoDeObra,
-        ordemServicoId: state.ordemServico?.id,
-        servicoId: state.servico?.id,
-      },
-    }),
-  );
-  state.prestacaoServico = criarPrestacao.body;
-  assertHasId("MECANICO - prestacao de servico criada com id", state.prestacaoServico);
-  assertDecimalEquals("MECANICO - prestacao criada com subtotal da mao de obra", state.prestacaoServico?.subtotal, precoMaoDeObra);
-
-  const prestacoes = await test("MECANICO - GET /prestacao-servico/por-ordem-servico/{ordemServicoId}", 200, () =>
-    request("GET", `/prestacao-servico/por-ordem-servico/${state.ordemServico?.id}`, { token }),
-  );
-
-  const prestacaoListada = Array.isArray(prestacoes.body)
-    ? prestacoes.body.find((item) => item.id === state.prestacaoServico?.id)
-    : null;
-  assertPresent("MECANICO - prestacao criada aparece na listagem da OS", prestacaoListada?.id);
-
-  const ordemAposPrestacao = await test("MECANICO - GET /ordem-servicos/{id} apos criar prestacao", 200, () =>
-    request("GET", `/ordem-servicos/${state.ordemServico?.id}`, { token }),
-  );
-  state.ordemServico = ordemAposPrestacao.body;
-  assertEquals("MECANICO - criar prestacao move OS para EM_DIAGNOSTICO", state.ordemServico?.situacao, "EM_DIAGNOSTICO");
-  assertPresent("MECANICO - criar prestacao preenche dataDiagnostico", state.ordemServico?.dataDiagnostico);
-  assertDecimalEquals("MECANICO - criar prestacao soma mao de obra no valorTotal da OS", state.ordemServico?.valorTotal, precoMaoDeObra);
-}
-
-async function runAlmoxarifeTests() {
-  const token = state.tokenAlmoxarife;
-  const quantidadeEstoqueInicial = 10;
-  const quantidadeEstoqueAtualizada = 15;
-  const valorUnitarioAtualizado = 69.9;
-  const quantidadeAlocada = 2;
-  const precoMaoDeObra = decimal(state.prestacaoServico?.precoMaoDeObra);
-  const valorPecas = valorUnitarioAtualizado * quantidadeAlocada;
-  const subtotalEsperado = precoMaoDeObra + valorPecas;
-
-  const criarPeca = await test("ALMOXARIFE - POST /pecas", 200, () =>
-    request("POST", "/pecas", {
-      token,
-      body: {
-        nome: `Peca Smoke ${runId}`,
-        marca: "Bosch",
-        valorUnitario: 59.9,
-        quantidadeEstoque: quantidadeEstoqueInicial,
-      },
-    }),
-  );
-  state.peca = criarPeca.body;
-  assertHasId("ALMOXARIFE - peca criada com id", state.peca);
-  assertEquals("ALMOXARIFE - peca criada com estoque inicial", state.peca?.quantidadeEstoque, quantidadeEstoqueInicial);
-
-  const atualizarPeca = await test("ALMOXARIFE - PUT /pecas/{id}", 200, () =>
-    request("PUT", `/pecas/${state.peca?.id}`, {
-      token,
-      body: {
-        nome: `Peca Smoke Alterada ${runId}`,
-        marca: "Fras-le",
-        valorUnitario: valorUnitarioAtualizado,
-        quantidadeEstoque: quantidadeEstoqueAtualizada,
-      },
-    }),
-  );
-  state.peca = atualizarPeca.body;
-  assertDecimalEquals("ALMOXARIFE - peca atualizada com valorUnitario esperado", state.peca?.valorUnitario, valorUnitarioAtualizado);
-  assertEquals("ALMOXARIFE - peca atualizada com estoque esperado", state.peca?.quantidadeEstoque, quantidadeEstoqueAtualizada);
-
-  const buscarPeca = await test("ALMOXARIFE - GET /pecas/{id}", 200, () =>
-    request("GET", `/pecas/${state.peca?.id}`, { token }),
-  );
-  state.peca = buscarPeca.body;
-
-  const alocacao = await test("ALMOXARIFE - POST /alocacao-pecas", 200, () =>
-    request("POST", "/alocacao-pecas", {
-      token,
-      body: {
-        quantidadeNecessaria: quantidadeAlocada,
-        prestacaoServicoId: state.prestacaoServico?.id ?? v9.prestacaoServicoId,
-        pecaId: state.peca?.id,
-      },
-    }),
-  );
-  assertHasId("ALMOXARIFE - alocacao de peca criada com id", alocacao.body);
-
-  const pecaAposAlocacao = await test("ALMOXARIFE - GET /pecas/{id} apos alocacao", 200, () =>
-    request("GET", `/pecas/${state.peca?.id}`, { token }),
-  );
-  state.peca = pecaAposAlocacao.body;
-  assertEquals(
-    "ALMOXARIFE - alocar peca baixa quantidade do estoque",
-    state.peca?.quantidadeEstoque,
-    quantidadeEstoqueAtualizada - quantidadeAlocada,
-  );
-
-  const prestacoesAposAlocacao = await test("MECANICO - GET prestacoes apos alocar peca", 200, () =>
-    request("GET", `/prestacao-servico/por-ordem-servico/${state.ordemServico?.id}`, { token: state.tokenMecanico }),
-  );
-  const prestacaoAposAlocacao = Array.isArray(prestacoesAposAlocacao.body)
-    ? prestacoesAposAlocacao.body.find((item) => item.id === state.prestacaoServico?.id)
-    : null;
-  state.prestacaoServico = prestacaoAposAlocacao ?? state.prestacaoServico;
-  assertDecimalEquals("MECANICO - alocar peca soma valor no subtotal da prestacao", state.prestacaoServico?.subtotal, subtotalEsperado);
-
-  const ordemAposAlocacao = await test("MECANICO - GET /ordem-servicos/{id} apos alocar peca", 200, () =>
-    request("GET", `/ordem-servicos/${state.ordemServico?.id}`, { token: state.tokenMecanico }),
-  );
-  state.ordemServico = ordemAposAlocacao.body;
-  assertDecimalEquals("MECANICO - alocar peca soma valor no valorTotal da OS", state.ordemServico?.valorTotal, subtotalEsperado);
-}
-
-async function runOrdemServicoExecutionFlowTests() {
-  const token = state.tokenMecanico;
-
-  const aguardandoAprovacao = await test("MECANICO - PATCH /ordem-servicos/{id}/enviar-para-aguardar-aprovacao", 200, () =>
-    request("PATCH", `/ordem-servicos/${state.ordemServico?.id}/enviar-para-aguardar-aprovacao`, { token }),
-  );
-  state.ordemServico = aguardandoAprovacao.body;
-  assertEquals("MECANICO - OS enviada para AGUARDANDO_APROVACAO", state.ordemServico?.situacao, "AGUARDANDO_APROVACAO");
-  assertPresent("MECANICO - OS enviada para aprovacao preenche dataAguardandoAprovacao", state.ordemServico?.dataAguardandoAprovacao);
-
-  const emExecucao = await test("MECANICO - PATCH /ordem-servicos/{id}/iniciar-execucao", 200, () =>
-    request("PATCH", `/ordem-servicos/${state.ordemServico?.id}/iniciar-execucao`, { token }),
-  );
-  state.ordemServico = emExecucao.body;
-  assertEquals("MECANICO - OS iniciada como EM_EXECUCAO", state.ordemServico?.situacao, "EM_EXECUCAO");
-  assertEquals("MECANICO - iniciar execucao marca OS como nao paga", state.ordemServico?.pago, false);
-  assertPresent("MECANICO - iniciar execucao preenche dataExecucao", state.ordemServico?.dataExecucao);
-
-  const prestacoesIniciadas = await test("MECANICO - GET prestacoes apos iniciar execucao", 200, () =>
-    request("GET", `/prestacao-servico/por-ordem-servico/${state.ordemServico?.id}`, { token }),
-  );
-  const prestacaoIniciada = Array.isArray(prestacoesIniciadas.body)
-    ? prestacoesIniciadas.body.find((item) => item.id === state.prestacaoServico?.id)
-    : null;
-  assertPresent("MECANICO - iniciar execucao preenche dataInicio da prestacao", prestacaoIniciada?.dataInicio);
-
-  const finalizarPrestacao = await test("MECANICO - PATCH /prestacao-servico/{id}/finalizar", 200, () =>
-    request("PATCH", `/prestacao-servico/${state.prestacaoServico?.id}/finalizar`, { token }),
-  );
-  state.prestacaoServico = finalizarPrestacao.body;
-  assertPresent("MECANICO - finalizar prestacao preenche dataFim", state.prestacaoServico?.dataFim);
-
-  const ordemFinalizada = await test("MECANICO - GET /ordem-servicos/{id} apos finalizar prestacao", 200, () =>
-    request("GET", `/ordem-servicos/${state.ordemServico?.id}`, { token }),
-  );
-  state.ordemServico = ordemFinalizada.body;
-  assertEquals("MECANICO - finalizar todas as prestacoes finaliza a OS", state.ordemServico?.situacao, "FINALIZADA");
-  assertPresent("MECANICO - OS finalizada preenche dataFinalizada", state.ordemServico?.dataFinalizada);
-
-  const ordemEntregue = await test("MECANICO - PATCH /ordem-servicos/{id}/pagar", 200, () =>
-    request("PATCH", `/ordem-servicos/${state.ordemServico?.id}/pagar`, { token }),
-  );
-  state.ordemServico = ordemEntregue.body;
-  assertEquals("MECANICO - pagar entrega a OS", state.ordemServico?.situacao, "ENTREGUE");
-  assertEquals("MECANICO - pagar marca OS como paga", state.ordemServico?.pago, true);
-  assertPresent("MECANICO - entregar preenche dataEntregue", state.ordemServico?.dataEntregue);
 }
 
 async function runRemainingEndpointTests() {
   const tokenMecanico = state.tokenMecanico;
-  const tokenAlmoxarife = state.tokenAlmoxarife;
 
   const servicoStatus = await criarServicoSmoke("Status");
 
@@ -621,68 +401,17 @@ async function runRemainingEndpointTests() {
   );
   assertEquals("MECANICO - ativar servico altera status para ATIVO", servicoAtivo.body?.statusRecursoEnum, "ATIVO");
 
-  const servicoVoltarDiagnostico = await criarServicoSmoke("VoltarDiagnostico");
-  const osVoltarDiagnostico = await criarOrdemSmoke("VoltarDiagnostico");
-  await criarPrestacaoSmoke("VoltarDiagnostico", osVoltarDiagnostico?.id, servicoVoltarDiagnostico?.id);
-
-  const osAguardando = await test("MECANICO - enviar OS auxiliar para aprovacao", 200, () =>
-    request("PATCH", `/ordem-servicos/${osVoltarDiagnostico?.id}/enviar-para-aguardar-aprovacao`, { token: tokenMecanico }),
-  );
-  assertEquals("MECANICO - OS auxiliar enviada para AGUARDANDO_APROVACAO", osAguardando.body?.situacao, "AGUARDANDO_APROVACAO");
-
-  const osDiagnostico = await test("MECANICO - PATCH /ordem-servicos/{id}/voltar-diagnostico", 200, () =>
-    request("PATCH", `/ordem-servicos/${osVoltarDiagnostico?.id}/voltar-diagnostico`, { token: tokenMecanico }),
-  );
-  assertEquals("MECANICO - voltar diagnostico altera OS para EM_DIAGNOSTICO", osDiagnostico.body?.situacao, "EM_DIAGNOSTICO");
-
-  const servicoCancelar = await criarServicoSmoke("Cancelar");
   const osCancelar = await criarOrdemSmoke("Cancelar");
-  await criarPrestacaoSmoke("Cancelar", osCancelar?.id, servicoCancelar?.id);
 
-  await test("MECANICO - enviar OS cancelamento para aprovacao", 200, () =>
-    request("PATCH", `/ordem-servicos/${osCancelar?.id}/enviar-para-aguardar-aprovacao`, { token: tokenMecanico }),
-  );
-
-  const osCancelada = await test("MECANICO - PATCH /ordem-servicos/{id}/cancelar", 200, () =>
+  // Sem rotas REST de transicao, a OS fica RECEBIDA; a saga (Fase 6) e quem leva a AGUARDANDO_APROVACAO.
+  await test("MECANICO - PATCH /ordem-servicos/{id}/cancelar em OS RECEBIDA deve retornar 422", 422, () =>
     request("PATCH", `/ordem-servicos/${osCancelar?.id}/cancelar`, { token: tokenMecanico }),
   );
-  assertEquals("MECANICO - cancelar OS altera status para INATIVO", osCancelada.body?.status, "INATIVO");
-
-  const servicoInativarAlocacao = await criarServicoSmoke("InativarAlocacao");
-  const osInativarAlocacao = await criarOrdemSmoke("InativarAlocacao");
-  const prestacaoInativarAlocacao = await criarPrestacaoSmoke("InativarAlocacao", osInativarAlocacao?.id, servicoInativarAlocacao?.id);
-  const pecaInativarAlocacao = await criarPecaSmoke("InativarAlocacao", 33.3, 5);
-
-  const alocacao = await test("ALMOXARIFE - POST /alocacao-pecas para inativar", 200, () =>
-    request("POST", "/alocacao-pecas", {
-      token: tokenAlmoxarife,
-      body: {
-        quantidadeNecessaria: 1,
-        prestacaoServicoId: prestacaoInativarAlocacao?.id,
-        pecaId: pecaInativarAlocacao?.id,
-      },
-    }),
-  );
-  assertHasId("ALMOXARIFE - alocacao para inativar criada com id", alocacao.body);
-
-  const alocacaoInativa = await test("ALMOXARIFE - PATCH /alocacao-pecas/{id}/inativar", 200, () =>
-    request("PATCH", `/alocacao-pecas/${alocacao.body?.id}/inativar`, { token: tokenAlmoxarife }),
-  );
-  assertEquals("ALMOXARIFE - inativar alocacao altera status para INATIVO", alocacaoInativa.body?.status, "INATIVO");
-
-  const servicoInativarPrestacao = await criarServicoSmoke("InativarPrestacao");
-  const osInativarPrestacao = await criarOrdemSmoke("InativarPrestacao");
-  const prestacaoInativar = await criarPrestacaoSmoke("InativarPrestacao", osInativarPrestacao?.id, servicoInativarPrestacao?.id);
-
-  const prestacaoInativa = await test("MECANICO - PATCH /prestacao-servico/{id}/inativar", 200, () =>
-    request("PATCH", `/prestacao-servico/${prestacaoInativar?.id}/inativar`, { token: tokenMecanico }),
-  );
-  assertEquals("MECANICO - inativar prestacao altera status para INATIVO", prestacaoInativa.body?.status, "INATIVO");
 }
 
 async function runSecurityTests() {
   await test("SECURITY - endpoint protegido sem token deve retornar 401 ou 403", [401, 403], () =>
-    request("GET", `/pecas/${v9.pecaId}`),
+    request("GET", `/ordem-servicos/${v9.ordemServicoId}`),
   );
 
   await test("SECURITY - /clientes com MECANICO deve retornar 403", 403, () =>
@@ -713,20 +442,12 @@ async function runSecurityTests() {
     }),
   );
 
-  await test("SECURITY - /pecas com ATENDENTE deve retornar 403", 403, () =>
-    request("GET", `/pecas/${v9.pecaId}`, { token: state.tokenAtendente }),
-  );
 
-  await test("SECURITY - /alocacao-pecas com MECANICO deve retornar 403", 403, () =>
-    request("POST", "/alocacao-pecas", {
-      token: state.tokenMecanico,
-      body: {
-        quantidadeNecessaria: 1,
-        prestacaoServicoId: v9.prestacaoServicoId,
-        pecaId: v9.pecaId,
-      },
-    }),
-  );
+  for (const rota of ["aprovar-orcamento", "recusar-orcamento"]) {
+    await test(`SECURITY - PATCH /ordem-servicos/{id}/${rota} removida nao e mais publica`, [401, 403], () =>
+      request("PATCH", `/ordem-servicos/${v9.ordemServicoId}/${rota}`),
+    );
+  }
 }
 
 async function runValidationTests() {
@@ -784,30 +505,6 @@ async function runValidationTests() {
     }),
   );
 
-  await test("VALIDATION - POST /pecas com valorUnitario negativo deve retornar 400 ou 422", [400, 422], () =>
-    request("POST", "/pecas", {
-      token: state.tokenAlmoxarife,
-      body: {
-        nome: `Peca Valor Invalido ${runId}`,
-        marca: "Bosch",
-        valorUnitario: -1,
-        quantidadeEstoque: 1,
-      },
-    }),
-  );
-
-  await test("VALIDATION - POST /pecas com quantidadeEstoque negativa deve retornar 400 ou 422", [400, 422], () =>
-    request("POST", "/pecas", {
-      token: state.tokenAlmoxarife,
-      body: {
-        nome: `Peca Estoque Invalido ${runId}`,
-        marca: "Bosch",
-        valorUnitario: 10,
-        quantidadeEstoque: -1,
-      },
-    }),
-  );
-
   await test("VALIDATION - POST /servicos com nome duplicado deve retornar 400 ou 422", [400, 422], () =>
     request("POST", "/servicos", {
       token: state.tokenMecanico,
@@ -820,10 +517,6 @@ async function runValidationTests() {
 
   await test("VALIDATION - GET /veiculos/{id} com UUID inexistente deve retornar 404", 404, () =>
     request("GET", `/veiculos/${missingUuid}`, { token: state.tokenAtendente }),
-  );
-
-  await test("VALIDATION - GET /pecas/{id} com UUID inexistente deve retornar 404", 404, () =>
-    request("GET", `/pecas/${missingUuid}`, { token: state.tokenAlmoxarife }),
   );
 
   await test("VALIDATION - GET /ordem-servicos/{id} com UUID inexistente deve retornar 404", 404, () =>
@@ -856,8 +549,6 @@ async function main() {
 
   await runAtendenteTests();
   await runMecanicoSetupTests();
-  await runAlmoxarifeTests();
-  await runOrdemServicoExecutionFlowTests();
   await runRemainingEndpointTests();
   await runSecurityTests();
   await runValidationTests();

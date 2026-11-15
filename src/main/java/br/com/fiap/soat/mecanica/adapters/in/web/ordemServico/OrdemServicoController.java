@@ -29,14 +29,9 @@ public class OrdemServicoController {
 
     private final CadastrarOrdemServicoUseCase cadastrarOrdemServicoUseCase;
     private final BuscarOrdemServicoPorIdUseCase buscarOrdemServicoPorIdUseCase;
-    private final PagarEEntregarOrdemServicoUseCase pagarEEntregarOrdemServicoUseCase;
     private final CancelarOrdemServicoPorDesistenciaUseCase cancelarOrdemServicoPorDesistenciaUseCase;
-    private final EnviarOrdemServicoParaAprovacaoUseCase enviarOrdemServicoParaAprovacaoUseCase;
-    private final VoltarOrdemServicoParaDiagnosticoUseCase voltarOrdemServicoParaDiagnosticoUseCase;
     private final BuscarTodosOrdemServicoPorVeiculoPlacaUseCase buscarTodosOrdemServicoPorVeiculoPlacaUseCase;
     private final ListarOrdensServicoAtivasUseCase listarOrdensServicoAtivasUseCase;
-    private final AprovarOrcamentoUseCase aprovarOrcamentoUseCase;
-    private final RecusarOrcamentoUseCase recusarOrcamentoUseCase;
 
     @PostMapping
     @PreAuthorize("hasRole('MECANICO')")
@@ -72,32 +67,6 @@ public class OrdemServicoController {
         ));
     }
 
-    @PatchMapping("{id}/pagar")
-    @PreAuthorize("hasRole('MECANICO')")
-    @Operation(summary = "Pagar e entregar uma Ordem de Serviço")
-    public ResponseEntity<OrdemServicoResponse> pagarEEntregar(@PathVariable UUID id) {
-
-        OrdemServico os = pagarEEntregarOrdemServicoUseCase.executar(id);
-
-        return ResponseEntity.ok(OrdemServicoResponseMapper.toResponse(os));
-    }
-
-    @PatchMapping("/{id}/enviar-para-aguardar-aprovacao")
-    @PreAuthorize("hasRole('MECANICO')")
-    @Operation(summary = "Iniciar aguardando aprovação da ordem de serviço")
-    public ResponseEntity<OrdemServicoResponse> enviarParaAguardarAprovacao(@PathVariable UUID id) {
-        OrdemServico os = enviarOrdemServicoParaAprovacaoUseCase.executar(id);
-        return ResponseEntity.ok(OrdemServicoResponseMapper.toResponse(os));
-    }
-
-    @PatchMapping("/{id}/voltar-diagnostico")
-    @PreAuthorize("hasRole('MECANICO')")
-    @Operation(summary = "Voltar a ordem de serviço para diagnóstico")
-    public ResponseEntity<OrdemServicoResponse> voltarDiagnostico(@PathVariable UUID id) {
-        OrdemServico os = voltarOrdemServicoParaDiagnosticoUseCase.executar(id);
-        return ResponseEntity.ok(OrdemServicoResponseMapper.toResponse(os));
-    }
-
     @PatchMapping("/{id}/cancelar")
     @PreAuthorize("hasRole('MECANICO')")
     @Operation(summary = "Cancelar ordem de serviço")
@@ -128,23 +97,5 @@ public class OrdemServicoController {
                 .toList();
 
         return ResponseEntity.ok(response);
-    }
-
-    @PatchMapping("/{id}/aprovar-orcamento")
-    @Operation(summary = "Aprovar orçamento da Ordem de Serviço — notificação externa")
-    public ResponseEntity<OrdemServicoResponse> aprovarOrcamento(@PathVariable UUID id) {
-
-        OrdemServico os = aprovarOrcamentoUseCase.executar(id);
-
-        return ResponseEntity.ok(OrdemServicoResponseMapper.toResponse(os));
-    }
-
-    @PatchMapping("/{id}/recusar-orcamento")
-    @Operation(summary = "Recusar orçamento da Ordem de Serviço — notificação externa")
-    public ResponseEntity<OrdemServicoResponse> recusarOrcamento(@PathVariable UUID id) {
-
-        OrdemServico os = recusarOrcamentoUseCase.executar(id);
-
-        return ResponseEntity.ok(OrdemServicoResponseMapper.toResponse(os));
     }
 }

@@ -8,7 +8,6 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -26,8 +25,6 @@ public class OrdemServico extends Principal {
     private LocalDateTime dataExecucao;
     private LocalDateTime dataFinalizada;
     private LocalDateTime dataEntregue;
-    private Boolean pago;
-    private BigDecimal valorTotal;
     private String observacao;
     private UUID veiculoId;
     private UUID usuarioId;
@@ -38,7 +35,6 @@ public class OrdemServico extends Principal {
         this.observacao = observacao;
         this.veiculoId = veiculoId;
         this.usuarioId = usuarioId;
-        this.valorTotal = BigDecimal.ZERO;
         this.situacao = SituacaoOrdemServicoEnum.RECEBIDA;
         this.dataRecebida = LocalDateTime.now();
     }
@@ -53,8 +49,6 @@ public class OrdemServico extends Principal {
             LocalDateTime dataExecucao,
             LocalDateTime dataFinalizada,
             LocalDateTime dataEntregue,
-            Boolean pago,
-            BigDecimal valorTotal,
             String observacao,
             UUID veiculoId,
             UUID usuarioId
@@ -70,8 +64,6 @@ public class OrdemServico extends Principal {
         os.dataExecucao = dataExecucao;
         os.dataFinalizada = dataFinalizada;
         os.dataEntregue = dataEntregue;
-        os.pago = pago;
-        os.valorTotal = valorTotal;
         os.observacao = observacao;
         os.veiculoId = veiculoId;
         os.usuarioId = usuarioId;
@@ -119,7 +111,6 @@ public class OrdemServico extends Principal {
 
         this.situacao = SituacaoOrdemServicoEnum.EM_EXECUCAO;
         this.dataExecucao = LocalDateTime.now();
-        this.pago = false;
     }
 
     public void finalizar() {
@@ -140,7 +131,6 @@ public class OrdemServico extends Principal {
             throw new RegraNegocioException("Ordem de serviço deve estar como finalizada para entregar");
         }
 
-        this.pago = true;
         this.situacao = SituacaoOrdemServicoEnum.ENTREGUE;
         this.dataEntregue = LocalDateTime.now();
     }
@@ -149,25 +139,6 @@ public class OrdemServico extends Principal {
         if (veiculoId == null) throw new RegraNegocioException("O veículo obrigatório");
 
         if (usuarioId == null) throw new RegraNegocioException("O mecânico obrigatório");
-    }
-
-    public void adicionarValor(BigDecimal valor) {
-        validarEIncializarValor(valor);
-
-        this.valorTotal = this.valorTotal.add(valor);
-    }
-
-    public void removerValor(BigDecimal valor) {
-        validarEIncializarValor(valor);
-
-        BigDecimal novoValor = this.valorTotal.subtract(valor);
-
-        if (novoValor.compareTo(BigDecimal.ZERO) < 0) {
-            this.valorTotal = BigDecimal.ZERO;
-            return;
-        }
-
-        this.valorTotal = novoValor;
     }
 
     public boolean isRecebida() {
@@ -206,16 +177,6 @@ public class OrdemServico extends Principal {
         }
 
         this.inativar();
-    }
-
-    private void validarEIncializarValor(BigDecimal valor) {
-        if (valor == null || valor.compareTo(BigDecimal.ZERO) < 0) {
-            throw new RegraNegocioException("Valor inválido");
-        }
-
-        if (this.valorTotal == null) {
-            this.valorTotal = BigDecimal.ZERO;
-        }
     }
 
     public void validarAtiva() {
