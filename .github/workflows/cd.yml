@@ -65,7 +65,7 @@ jobs:
       TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
       TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
       TF_VAR_datadog_api_key: ${{ secrets.DATADOG_API_KEY }}
-      KUBECONFIG: ${{ github.workspace }}/infra/kubeconfig
+      KUBECONFIG: ${{ github.workspace }}/infra/k8s/kubeconfig
 
     steps:
       - name: Checkout the tested commit
@@ -96,24 +96,24 @@ jobs:
           docker pull "$TF_VAR_api_image"
 
       - name: Terraform format check
-        working-directory: infra
+        working-directory: infra/k8s
         run: terraform fmt -check -recursive
 
       - name: Terraform init
         id: terraform-init
-        working-directory: infra
+        working-directory: infra/k8s
         run: terraform init -input=false
 
       - name: Terraform validate
-        working-directory: infra
+        working-directory: infra/k8s
         run: terraform validate
 
       - name: Terraform plan
-        working-directory: infra
+        working-directory: infra/k8s
         run: terraform plan -input=false -out=deploy.tfplan
 
       - name: Terraform apply
-        working-directory: infra
+        working-directory: infra/k8s
         run: terraform apply -input=false -auto-approve deploy.tfplan
 
       - name: Validate cluster and workloads
@@ -198,7 +198,7 @@ jobs:
 
       - name: Terraform destroy
         if: ${{ always() && steps.terraform-init.outcome == 'success' }}
-        working-directory: infra
+        working-directory: infra/k8s
         run: terraform destroy -input=false -auto-approve
 
       - name: Confirm that no Kind container remains

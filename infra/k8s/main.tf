@@ -22,7 +22,7 @@ resource "kind_cluster" "ci_cluster" {
 }
 
 data "kubectl_path_documents" "manifests" {
-  pattern = "${path.module}/../k8s/*.yaml"
+  pattern = "${path.module}/../../k8s/*.yaml"
 
   vars = {
     api_image     = var.api_image

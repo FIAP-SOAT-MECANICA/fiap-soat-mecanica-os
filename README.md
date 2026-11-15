@@ -476,7 +476,7 @@ Crie as variaveis locais a partir do exemplo e substitua somente os
 placeholders. `terraform.tfvars`, state e kubeconfig sao ignorados pelo Git:
 
 ```bash
-cd infra
+cd infra/k8s
 cp terraform.tfvars.example terraform.tfvars
 terraform init
 terraform fmt -check -recursive
@@ -512,7 +512,7 @@ terraform destroy
 O destroy remove o cluster e o PVC interno; portanto, os dados do PostgreSQL
 sao perdidos. Localmente, o cluster pode ficar ativo ate esse comando. No
 GitHub Actions ele e efemero e o `destroy` roda sempre ao final. Consulte o
-guia detalhado em [`infra/README.md`](infra/README.md).
+guia detalhado em [`infra/k8s/README.md`](infra/k8s/README.md).
 
 ## Swagger
 
