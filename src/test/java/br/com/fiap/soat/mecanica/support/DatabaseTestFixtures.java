@@ -2,7 +2,6 @@ package br.com.fiap.soat.mecanica.support;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import java.math.BigDecimal;
 import java.util.UUID;
 
 public final class DatabaseTestFixtures {
@@ -66,12 +65,11 @@ public final class DatabaseTestFixtures {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update("""
                 INSERT INTO ordem_servicos (
-                    id, status, situacao, data_recebida, pago, valor_total, observacao, veiculo_id, usuario_id
+                    id, status, situacao, data_recebida, observacao, veiculo_id, usuario_id
                 )
-                VALUES (?, 'ATIVO', 'RECEBIDA', CURRENT_TIMESTAMP, FALSE, ?, 'OS fixture', ?, ?)
+                VALUES (?, 'ATIVO', 'RECEBIDA', CURRENT_TIMESTAMP, 'OS fixture', ?, ?)
                 """,
                 id,
-                new BigDecimal("0.00"),
                 veiculoId,
                 usuarioId);
         return id;
