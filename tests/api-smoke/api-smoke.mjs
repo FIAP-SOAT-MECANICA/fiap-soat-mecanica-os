@@ -403,10 +403,11 @@ async function runRemainingEndpointTests() {
 
   const osCancelar = await criarOrdemSmoke("Cancelar");
 
-  // Sem rotas REST de transicao, a OS fica RECEBIDA; a saga (Fase 6) e quem leva a AGUARDANDO_APROVACAO.
-  await test("MECANICO - PATCH /ordem-servicos/{id}/cancelar em OS RECEBIDA deve retornar 422", 422, () =>
+  const osCancelada = await test("MECANICO - PATCH /ordem-servicos/{id}/cancelar", 200, () =>
     request("PATCH", `/ordem-servicos/${osCancelar?.id}/cancelar`, { token: tokenMecanico }),
   );
+  assertEquals("MECANICO - cancelar leva a OS para CANCELADA", osCancelada.body?.situacao, "CANCELADA");
+  assertEquals("MECANICO - cancelar mantem o registro ATIVO", osCancelada.body?.status, "ATIVO");
 }
 
 async function runSecurityTests() {

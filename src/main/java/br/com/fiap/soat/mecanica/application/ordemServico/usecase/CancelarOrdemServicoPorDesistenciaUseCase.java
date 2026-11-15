@@ -1,5 +1,6 @@
 package br.com.fiap.soat.mecanica.application.ordemServico.usecase;
 
+import br.com.fiap.soat.mecanica.domain.enums.SituacaoOrdemServicoEnum;
 import br.com.fiap.soat.mecanica.domain.exception.RecursoNaoEncontradoException;
 import br.com.fiap.soat.mecanica.domain.ordemServico.OrdemServico;
 import br.com.fiap.soat.mecanica.domain.ordemServico.OrdemServicoRepository;
@@ -16,6 +17,7 @@ import static br.com.fiap.soat.mecanica.config.observability.BusinessEventLogger
 public class CancelarOrdemServicoPorDesistenciaUseCase {
 
     private final OrdemServicoRepository ordemServicoRepository;
+    private final NotificarAlteracaoSituacaoOrdemServicoUseCase notificarAlteracaoSituacaoOrdemServicoUseCase;
 
     @Transactional
     public OrdemServico executar(UUID osId) {
@@ -23,9 +25,15 @@ public class CancelarOrdemServicoPorDesistenciaUseCase {
         OrdemServico os = ordemServicoRepository.buscarPorId(osId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Ordem de serviço não encontrada"));
 
+        SituacaoOrdemServicoEnum situacaoAnterior = os.getSituacao();
         os.cancelarPorDesistencia();
 
+        if (os.getSituacao() == situacaoAnterior) {
+            return os;
+        }
+
         OrdemServico ordemServicoSalva = ordemServicoRepository.salvar(os);
+        notificarAlteracaoSituacaoOrdemServicoUseCase.executar(ordemServicoSalva, situacaoAnterior);
         ordemServicoCancelada(ordemServicoSalva.getId());
         return ordemServicoSalva;
     }

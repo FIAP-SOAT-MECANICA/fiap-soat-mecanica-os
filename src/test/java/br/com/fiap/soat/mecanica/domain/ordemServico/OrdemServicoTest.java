@@ -6,8 +6,12 @@ import br.com.fiap.soat.mecanica.util.TestDataFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -202,25 +206,56 @@ class OrdemServicoTest {
                     .isInstanceOf(RegraNegocioException.class);
         }
 
-        @Test
-        @DisplayName("Deve cancelar por desistência quando AGUARDANDO_APROVACAO")
-        void deveCancelar_quandoAguardandoAprovacao() {
-            // Arrange
-            OrdemServico os = TestDataFactory.criarOrdemServicoAguardandoAprovacao();
-
-            // Act
+        @ParameterizedTest(name = "Deve cancelar quando {0}")
+        @MethodSource("br.com.fiap.soat.mecanica.domain.ordemServico.OrdemServicoTest#osCancelaveis")
+        void deveCancelar_semInativarRegistro(String situacao, OrdemServico os) {
             os.cancelarPorDesistencia();
 
-            // Assert
-            assertThat(os.isInativo()).isTrue();
+            assertThat(os.getSituacao()).isEqualTo(SituacaoOrdemServicoEnum.CANCELADA);
+            assertThat(os.isAtivo()).isTrue();
         }
 
         @Test
-        @DisplayName("Deve lançar exceção ao cancelar quando não AGUARDANDO_APROVACAO")
-        void deveLancarExcecao_quandoCancelarNaoAguardando() {
-            OrdemServico os = TestDataFactory.criarOrdemServicoRecebida();
-            assertThatThrownBy(os::cancelarPorDesistencia)
-                    .isInstanceOf(RegraNegocioException.class);
+        @DisplayName("Deve ignorar novo cancelamento quando já CANCELADA (mensagem repetida da saga)")
+        void deveIgnorar_quandoCancelarDuasVezes() {
+            OrdemServico os = TestDataFactory.criarOrdemServicoAguardandoAprovacao();
+            os.cancelarPorDesistencia();
+
+            os.cancelarPorDesistencia();
+
+            assertThat(os.getSituacao()).isEqualTo(SituacaoOrdemServicoEnum.CANCELADA);
+        }
+
+        @Test
+        @DisplayName("Deve lançar exceção ao cancelar quando FINALIZADA")
+        void deveLancarExcecao_quandoCancelarFinalizada() {
+            OrdemServico os = TestDataFactory.criarOrdemServicoFinalizada();
+
+            assertThatThrownBy(os::cancelarPorDesistencia).isInstanceOf(RegraNegocioException.class);
+            assertThat(os.getSituacao()).isEqualTo(SituacaoOrdemServicoEnum.FINALIZADA);
+        }
+
+        @Test
+        @DisplayName("Deve lançar exceção ao cancelar quando ENTREGUE")
+        void deveLancarExcecao_quandoCancelarEntregue() {
+            OrdemServico os = TestDataFactory.criarOrdemServicoEntregue();
+
+            assertThatThrownBy(os::cancelarPorDesistencia).isInstanceOf(RegraNegocioException.class);
+            assertThat(os.getSituacao()).isEqualTo(SituacaoOrdemServicoEnum.ENTREGUE);
+        }
+
+        @Test
+        @DisplayName("Deve bloquear as demais transições quando CANCELADA")
+        void deveBloquearTransicoes_quandoCancelada() {
+            OrdemServico os = TestDataFactory.criarOrdemServicoAguardandoAprovacao();
+            os.cancelarPorDesistencia();
+
+            assertThatThrownBy(os::iniciarDiagnostico).isInstanceOf(RegraNegocioException.class);
+            assertThatThrownBy(os::enviarParaAprovacao).isInstanceOf(RegraNegocioException.class);
+            assertThatThrownBy(os::voltarParaDiagnostico).isInstanceOf(RegraNegocioException.class);
+            assertThatThrownBy(os::iniciarExecucao).isInstanceOf(RegraNegocioException.class);
+            assertThatThrownBy(os::finalizar).isInstanceOf(RegraNegocioException.class);
+            assertThatThrownBy(os::entregar).isInstanceOf(RegraNegocioException.class);
         }
 
         @Test
@@ -235,6 +270,15 @@ class OrdemServicoTest {
             assertThatThrownBy(os::entregar).isInstanceOf(RegraNegocioException.class);
             assertThatThrownBy(os::cancelarPorDesistencia).isInstanceOf(RegraNegocioException.class);
         }
+    }
+
+    static Stream<Arguments> osCancelaveis() {
+        return Stream.of(
+                Arguments.of("RECEBIDA", TestDataFactory.criarOrdemServicoRecebida()),
+                Arguments.of("EM_DIAGNOSTICO", TestDataFactory.criarOrdemServicoEmDiagnostico()),
+                Arguments.of("AGUARDANDO_APROVACAO", TestDataFactory.criarOrdemServicoAguardandoAprovacao()),
+                Arguments.of("EM_EXECUCAO", TestDataFactory.criarOrdemServicoEmExecucao())
+        );
     }
 
     @Nested

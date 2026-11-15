@@ -161,6 +161,14 @@ public class OrdemServico extends Principal {
         return this.situacao == SituacaoOrdemServicoEnum.FINALIZADA;
     }
 
+    private boolean isCancelada() {
+        return this.situacao == SituacaoOrdemServicoEnum.CANCELADA;
+    }
+
+    private boolean isEntregue() {
+        return this.situacao == SituacaoOrdemServicoEnum.ENTREGUE;
+    }
+
     public void validarPermiteAlterarDiagnostico() {
         validarAtiva();
 
@@ -172,11 +180,19 @@ public class OrdemServico extends Principal {
     public void cancelarPorDesistencia() {
         validarAtiva();
 
-        if (!isAguardandoAprovacao()) {
-            throw new RegraNegocioException("Ordem de serviço deve estar aguardando aprovação para ser cancelada");
+        if (isCancelada()) {
+            return;
         }
 
-        this.inativar();
+        if (isFinalizada()) {
+            throw new RegraNegocioException("Ordem de serviço não pode ser cancelada, pois está finalizada");
+        }
+
+        if (isEntregue()) {
+            throw new RegraNegocioException("Ordem de serviço não pode ser cancelada, pois está entregue");
+        }
+
+        this.situacao = SituacaoOrdemServicoEnum.CANCELADA;
     }
 
     public void validarAtiva() {
