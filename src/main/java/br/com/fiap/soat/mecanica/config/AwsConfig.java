@@ -3,6 +3,7 @@ package br.com.fiap.soat.mecanica.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
@@ -14,6 +15,7 @@ import software.amazon.awssdk.services.sqs.SqsClientBuilder;
 import java.net.URI;
 import java.time.Clock;
 
+@EnableScheduling
 @Configuration
 public class AwsConfig {
 
