@@ -120,6 +120,20 @@ class MessageEnvelopeTest {
     }
 
     @Test
+    @DisplayName("Na entrada aceita sagaId nulo (eventos do Billing), mas mantém as demais regras")
+    void deveAceitarSagaIdNuloNaEntrada() {
+        MessageEnvelope semSaga = new MessageEnvelope(envelope.messageId(), envelope.type(), 1, null,
+                envelope.osId(), envelope.correlationId(), envelope.causationId(), envelope.occurredAt(),
+                envelope.payload());
+        MessageEnvelope semOs = new MessageEnvelope(envelope.messageId(), envelope.type(), 1, null,
+                null, envelope.correlationId(), envelope.causationId(), envelope.occurredAt(),
+                envelope.payload());
+
+        assertThatCode(semSaga::validarEntrada).doesNotThrowAnyException();
+        assertThatThrownBy(semOs::validarEntrada).isInstanceOf(MensagemInvalidaException.class);
+    }
+
+    @Test
     @DisplayName("Deve recusar osId nulo")
     void deveRecusarOsIdNulo() {
         MessageEnvelope semId = new MessageEnvelope(envelope.messageId(), envelope.type(), 1, envelope.sagaId(),

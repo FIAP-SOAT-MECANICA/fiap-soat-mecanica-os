@@ -3,6 +3,11 @@ package br.com.fiap.soat.mecanica.adapters.in.web.ordemServico;
 import br.com.fiap.soat.mecanica.adapters.in.web.security.CustomUserDetailsService;
 import br.com.fiap.soat.mecanica.adapters.out.security.JwtService;
 import br.com.fiap.soat.mecanica.application.ordemServico.dto.Pagina;
+import br.com.fiap.soat.mecanica.application.ordemServico.historico.BuscarHistoricoOrdemServicoUseCase;
+import br.com.fiap.soat.mecanica.application.ordemServico.historico.EntradaHistorico;
+import br.com.fiap.soat.mecanica.application.saga.OrquestradorSaga;
+import br.com.fiap.soat.mecanica.domain.saga.SagaOrdemServico;
+import java.time.Instant;
 import br.com.fiap.soat.mecanica.application.ordemServico.usecase.*;
 import br.com.fiap.soat.mecanica.config.SecurityConfig;
 import br.com.fiap.soat.mecanica.domain.ordemServico.OrdemServico;
@@ -44,6 +49,10 @@ class OrdemServicoControllerTest {
     private BuscarTodosOrdemServicoPorVeiculoPlacaUseCase buscarTodosPorPlacaUseCase;
     @MockitoBean
     private ListarOrdensServicoAtivasUseCase listarOrdensServicoAtivasUseCase;
+    @MockitoBean
+    private BuscarHistoricoOrdemServicoUseCase buscarHistoricoUseCase;
+    @MockitoBean
+    private OrquestradorSaga orquestradorSaga;
     @MockitoBean
     private JwtService jwtService;
     @MockitoBean
@@ -145,5 +154,37 @@ class OrdemServicoControllerTest {
 
         mockMvc.perform(patch("/ordem-servicos/{id}/cancelar", os.getId()).with(csrf()))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(roles = "MECANICO")
+    @DisplayName("Deve devolver o histórico da OS em ordem cronológica")
+    void deveDevolverHistorico() throws Exception {
+        UUID osId = UUID.randomUUID();
+        when(buscarHistoricoUseCase.executar(osId)).thenReturn(List.of(
+                new EntradaHistorico(osId, Instant.parse("2026-11-17T10:00:00Z"), UUID.randomUUID(),
+                        null, "RECEBIDA", "OrdemServicoAberta"),
+                new EntradaHistorico(osId, Instant.parse("2026-11-17T10:01:00Z"), UUID.randomUUID(),
+                        "RECEBIDA", "EM_DIAGNOSTICO", "DiagnosticoAberto")));
+
+        mockMvc.perform(get("/ordem-servicos/{id}/historico", osId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].situacaoNova").value("RECEBIDA"))
+                .andExpect(jsonPath("$[1].situacaoAnterior").value("RECEBIDA"))
+                .andExpect(jsonPath("$[1].evento").value("DiagnosticoAberto"));
+    }
+
+    @Test
+    @WithMockUser(roles = "MECANICO")
+    @DisplayName("Deve devolver o estado da saga da OS")
+    void deveDevolverSaga() throws Exception {
+        UUID osId = UUID.randomUUID();
+        SagaOrdemServico saga = SagaOrdemServico.iniciar(osId, Instant.parse("2026-11-17T10:00:00Z"));
+        when(orquestradorSaga.buscarPorOsId(osId)).thenReturn(saga);
+
+        mockMvc.perform(get("/ordem-servicos/{id}/saga", osId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.passoAtual").value("ABERTURA"))
+                .andExpect(jsonPath("$.estado").value("EM_ANDAMENTO"));
     }
 }

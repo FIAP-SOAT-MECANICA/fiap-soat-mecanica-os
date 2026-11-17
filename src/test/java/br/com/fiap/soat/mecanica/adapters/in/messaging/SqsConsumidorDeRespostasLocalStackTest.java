@@ -2,9 +2,13 @@ package br.com.fiap.soat.mecanica.adapters.in.messaging;
 
 import br.com.fiap.soat.mecanica.adapters.out.messaging.MessageEnvelope;
 import br.com.fiap.soat.mecanica.application.saga.EventoRecebido;
+import br.com.fiap.soat.mecanica.application.saga.InboxRepository;
+import br.com.fiap.soat.mecanica.application.saga.ProcessadorDeEventos;
 import br.com.fiap.soat.mecanica.application.saga.TratadorDeEventos;
+import br.com.fiap.soat.mecanica.config.observability.RastreamentoMensagens;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import io.opentelemetry.api.trace.Span;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,13 +23,16 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.MessageAttributeValue;
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -36,6 +43,8 @@ class SqsConsumidorDeRespostasLocalStackTest {
     static final LocalStackContainer LOCALSTACK = new LocalStackContainer(
             DockerImageName.parse("localstack/localstack:4.9.2"))
             .withServices(LocalStackContainer.Service.SQS);
+
+    private static final String TRACE_ID = "4bf92f3577b34da6a3ce929d0e0e4736";
 
     private static SqsClient sqs;
     private final ObjectMapper mapper = new ObjectMapper()
@@ -67,7 +76,7 @@ class SqsConsumidorDeRespostasLocalStackTest {
                 .queueName("respostas-" + UUID.randomUUID())
                 .attributes(Map.of(QueueAttributeName.VISIBILITY_TIMEOUT, "1"))).queueUrl();
         consumidor = new SqsConsumidorDeRespostas(sqs, mapper, filaUrl,
-                List.of(anotador, new TratadorQueFalha()));
+                new ProcessadorDeEventos(new InboxEmMemoria(), List.of(anotador, new TratadorQueFalha())));
     }
 
     @Test
@@ -83,8 +92,51 @@ class SqsConsumidorDeRespostasLocalStackTest {
         assertThat(evento.messageId()).isEqualTo(envelope.messageId());
         assertThat(evento.sagaId()).isEqualTo(envelope.sagaId());
         assertThat(evento.osId()).isEqualTo(envelope.osId());
+        assertThat(evento.correlationId()).isEqualTo("req-123");
         assertThat(evento.payload().get("osId").asText()).isEqualTo(envelope.osId().toString());
         assertThat(lerDeNovo()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Deve apagar a mensagem duplicada sem tratar de novo")
+    void deveApagarDuplicadaSemTratar() throws Exception {
+        String corpo = mapper.writeValueAsString(envelope("PecasReservadas"));
+        enviar(corpo);
+        enviar(corpo); // mesma mensagem duas vezes, como numa reentrega do SQS
+
+        consumidor.consumir();
+
+        assertThat(anotador.recebidos).hasSize(1);
+        assertThat(lerDeNovo()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Deve aceitar evento do Billing sem sagaId")
+    void deveAceitarEventoSemSagaId() throws Exception {
+        MessageEnvelope envelope = envelope("PecasReservadas");
+        MessageEnvelope semSaga = new MessageEnvelope(envelope.messageId(), envelope.type(), 1, null,
+                envelope.osId(), null, null, envelope.occurredAt(), envelope.payload());
+        enviar(mapper.writeValueAsString(semSaga));
+
+        consumidor.consumir();
+
+        assertThat(anotador.recebidos).hasSize(1);
+        assertThat(anotador.recebidos.get(0).sagaId()).isNull();
+    }
+
+    @Test
+    @DisplayName("Deve reativar o rastro do produtor a partir do atributo traceparent (7.1)")
+    void deveReativarRastro() throws Exception {
+        String traceparent = "00-" + TRACE_ID + "-00f067aa0ba902b7-01";
+        String corpo = mapper.writeValueAsString(envelope("PecasReservadas"));
+        sqs.sendMessage(r -> r.queueUrl(filaUrl)
+                .messageBody(corpo)
+                .messageAttributes(Map.of(RastreamentoMensagens.ATRIBUTO, MessageAttributeValue.builder()
+                        .dataType("String").stringValue(traceparent).build())));
+
+        consumidor.consumir();
+
+        assertThat(anotador.traceIds).containsExactly(TRACE_ID);
     }
 
     @Test
@@ -138,24 +190,35 @@ class SqsConsumidorDeRespostasLocalStackTest {
         return sqs.receiveMessage(r -> r.queueUrl(filaUrl).waitTimeSeconds(1)).messages();
     }
 
-    private static class TratadorQueAnota implements TratadorDeEventos {
-        private final List<EventoRecebido> recebidos = new ArrayList<>();
+    private static class InboxEmMemoria implements InboxRepository {
+        private final Set<UUID> vistas = ConcurrentHashMap.newKeySet();
 
         @Override
-        public String tipo() {
-            return "PecasReservadas";
+        public boolean registrarSeNova(UUID messageId, String tipo) {
+            return vistas.add(messageId);
+        }
+    }
+
+    private static class TratadorQueAnota implements TratadorDeEventos {
+        private final List<EventoRecebido> recebidos = new ArrayList<>();
+        private final List<String> traceIds = new ArrayList<>();
+
+        @Override
+        public Set<String> tipos() {
+            return Set.of("PecasReservadas");
         }
 
         @Override
         public void tratar(EventoRecebido evento) {
             recebidos.add(evento);
+            traceIds.add(Span.current().getSpanContext().getTraceId());
         }
     }
 
     private static class TratadorQueFalha implements TratadorDeEventos {
         @Override
-        public String tipo() {
-            return "ReservaPecasRecusada";
+        public Set<String> tipos() {
+            return Set.of("ReservaPecasRecusada");
         }
 
         @Override

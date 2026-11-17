@@ -1,13 +1,10 @@
 package br.com.fiap.soat.mecanica.application.saga;
 
-import java.util.UUID;
-
 public interface PublicadorDeComandos {
 
     /**
-     * Envia o comando ao serviço de destino.
-     *
-     * @return o messageId gerado, que vira o causationId das respostas
+     * Envia ao serviço de destino (EXECUCAO ou BILLING) a mensagem já gravada na outbox,
+     * usando o id da linha como messageId do envelope.
      */
-    UUID publicar(Comando comando);
+    void publicar(MensagemOutbox mensagem);
 }

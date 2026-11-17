@@ -24,4 +24,4 @@ resource "aws_ssm_parameter" "historico_table_name" {
   name  = "/${var.project}/os/historico-table-name"
   type  = "String"
   value = aws_dynamodb_table.historico.name
-}    
+}

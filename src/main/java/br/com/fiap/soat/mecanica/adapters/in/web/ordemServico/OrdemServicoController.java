@@ -1,6 +1,10 @@
 package br.com.fiap.soat.mecanica.adapters.in.web.ordemServico;
 
+import br.com.fiap.soat.mecanica.adapters.in.web.ordemServico.dto.HistoricoOrdemServicoResponse;
 import br.com.fiap.soat.mecanica.adapters.in.web.ordemServico.dto.OrdemServicoIncluirRequest;
+import br.com.fiap.soat.mecanica.adapters.in.web.ordemServico.dto.SagaOrdemServicoResponse;
+import br.com.fiap.soat.mecanica.application.ordemServico.historico.BuscarHistoricoOrdemServicoUseCase;
+import br.com.fiap.soat.mecanica.application.saga.OrquestradorSaga;
 import br.com.fiap.soat.mecanica.adapters.in.web.ordemServico.dto.OrdemServicoResponse;
 import br.com.fiap.soat.mecanica.adapters.in.web.ordemServico.dto.PaginaResponse;
 import br.com.fiap.soat.mecanica.adapters.in.web.ordemServico.mapper.OrdemServicoResponseMapper;
@@ -32,6 +36,8 @@ public class OrdemServicoController {
     private final CancelarOrdemServicoPorDesistenciaUseCase cancelarOrdemServicoPorDesistenciaUseCase;
     private final BuscarTodosOrdemServicoPorVeiculoPlacaUseCase buscarTodosOrdemServicoPorVeiculoPlacaUseCase;
     private final ListarOrdensServicoAtivasUseCase listarOrdensServicoAtivasUseCase;
+    private final BuscarHistoricoOrdemServicoUseCase buscarHistoricoOrdemServicoUseCase;
+    private final OrquestradorSaga orquestradorSaga;
 
     @PostMapping
     @PreAuthorize("hasRole('MECANICO')")
@@ -83,6 +89,22 @@ public class OrdemServicoController {
         OrdemServico os = buscarOrdemServicoPorIdUseCase.executar(id);
 
         return ResponseEntity.ok(OrdemServicoResponseMapper.toResponse(os));
+    }
+
+    @GetMapping("/{id}/historico")
+    @PreAuthorize("hasRole('MECANICO')")
+    @Operation(summary = "Histórico de situações da Ordem de Serviço, em ordem cronológica")
+    public ResponseEntity<List<HistoricoOrdemServicoResponse>> historico(@PathVariable UUID id) {
+        return ResponseEntity.ok(buscarHistoricoOrdemServicoUseCase.executar(id).stream()
+                .map(HistoricoOrdemServicoResponse::de)
+                .toList());
+    }
+
+    @GetMapping("/{id}/saga")
+    @PreAuthorize("hasRole('MECANICO')")
+    @Operation(summary = "Estado da saga da Ordem de Serviço: passo atual, concluídos e compensados")
+    public ResponseEntity<SagaOrdemServicoResponse> saga(@PathVariable UUID id) {
+        return ResponseEntity.ok(SagaOrdemServicoResponse.de(orquestradorSaga.buscarPorOsId(id)));
     }
 
     @GetMapping("/veiculo/placa/{placa}")

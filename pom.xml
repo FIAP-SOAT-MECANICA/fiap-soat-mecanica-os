@@ -32,6 +32,7 @@
 		<sonar.projectName>FIAP SOAT Mecanica API</sonar.projectName>
 		<sonar.coverage.jacoco.xmlReportPaths>${project.basedir}/target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
 		<aws.sdk.version>2.57.3</aws.sdk.version>
+		<cucumber.version>7.20.1</cucumber.version>
 	</properties>
 	<dependencyManagement>
 		<dependencies>
@@ -150,6 +151,36 @@
 		<dependency>
 			<groupId>org.testcontainers</groupId>
 			<artifactId>localstack</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- Propagação de trace nas mensagens (7.1). Só a API: em produção o agente injetado
+		     pelo OpenTelemetry Operator fornece a implementação; sem agente, vira no-op. -->
+		<dependency>
+			<groupId>io.opentelemetry</groupId>
+			<artifactId>opentelemetry-api</artifactId>
+		</dependency>
+		<!-- BDD (7.2/7.3) -->
+		<dependency>
+			<groupId>io.cucumber</groupId>
+			<artifactId>cucumber-java</artifactId>
+			<version>${cucumber.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.cucumber</groupId>
+			<artifactId>cucumber-spring</artifactId>
+			<version>${cucumber.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.cucumber</groupId>
+			<artifactId>cucumber-junit-platform-engine</artifactId>
+			<version>${cucumber.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.platform</groupId>
+			<artifactId>junit-platform-suite</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

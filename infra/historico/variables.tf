@@ -8,4 +8,4 @@ variable "project" {
   description = "Prefixo compartilhado entre os repositórios"
   type        = string
   default     = "mecanica"
-}    
+}

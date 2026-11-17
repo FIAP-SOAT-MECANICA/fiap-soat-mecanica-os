@@ -1,5 +1,6 @@
 package br.com.fiap.soat.mecanica.application.ordemServico.usecase;
 
+import br.com.fiap.soat.mecanica.application.saga.OrquestradorSaga;
 import br.com.fiap.soat.mecanica.domain.enums.SituacaoOrdemServicoEnum;
 import br.com.fiap.soat.mecanica.domain.exception.RecursoNaoEncontradoException;
 import br.com.fiap.soat.mecanica.domain.exception.RegraNegocioException;
@@ -19,7 +20,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -30,72 +30,54 @@ class CancelarOrdemServicoPorDesistenciaUseCaseTest {
     @Mock
     private OrdemServicoRepository ordemServicoRepository;
     @Mock
-    private NotificarAlteracaoSituacaoOrdemServicoUseCase notificacaoUseCase;
+    private OrquestradorSaga orquestradorSaga;
     @InjectMocks
     private CancelarOrdemServicoPorDesistenciaUseCase useCase;
 
     @Test
-    @DisplayName("Deve cancelar OS por desistência com sucesso")
-    void deveCancelar_quandoOsAguardandoAprovacao() {
-        // Arrange
+    @DisplayName("Deve delegar o cancelamento ao orquestrador, que compensa a saga")
+    void deveDelegarAoOrquestrador() {
         OrdemServico os = TestDataFactory.criarOrdemServicoAguardandoAprovacao();
         when(ordemServicoRepository.buscarPorId(any())).thenReturn(Optional.of(os));
-        when(ordemServicoRepository.salvar(any())).thenReturn(os);
+        when(orquestradorSaga.cancelarPorDesistencia(os)).thenAnswer(inv -> {
+            os.cancelarPorDesistencia();
+            return os;
+        });
 
-        // Act
         OrdemServico resultado = useCase.executar(os.getId());
 
-        // Assert
         assertThat(resultado.getSituacao()).isEqualTo(SituacaoOrdemServicoEnum.CANCELADA);
-        verify(ordemServicoRepository).salvar(os);
-        verify(notificacaoUseCase).executar(os, SituacaoOrdemServicoEnum.AGUARDANDO_APROVACAO);
+        verify(orquestradorSaga).cancelarPorDesistencia(os);
+    }
+
+    @Test
+    @DisplayName("Deve devolver a OS já cancelada sem erro")
+    void deveSerIdempotente() {
+        OrdemServico os = TestDataFactory.criarOrdemServicoAguardandoAprovacao();
+        os.cancelarPorDesistencia();
+        when(ordemServicoRepository.buscarPorId(any())).thenReturn(Optional.of(os));
+        when(orquestradorSaga.cancelarPorDesistencia(os)).thenReturn(os);
+
+        assertThat(useCase.executar(os.getId()).getSituacao()).isEqualTo(SituacaoOrdemServicoEnum.CANCELADA);
+    }
+
+    @Test
+    @DisplayName("Deve propagar a recusa do domínio (OS finalizada não cancela)")
+    void devePropagarRegraDeNegocio() {
+        OrdemServico os = TestDataFactory.criarOrdemServicoFinalizada();
+        when(ordemServicoRepository.buscarPorId(any())).thenReturn(Optional.of(os));
+        when(orquestradorSaga.cancelarPorDesistencia(os)).thenThrow(new RegraNegocioException("finalizada"));
+
+        assertThatThrownBy(() -> useCase.executar(os.getId())).isInstanceOf(RegraNegocioException.class);
     }
 
     @Test
     @DisplayName("Deve lançar exceção quando OS não encontrada")
     void deveLancarExcecao_quandoNaoEncontrada() {
         when(ordemServicoRepository.buscarPorId(any())).thenReturn(Optional.empty());
+
         assertThatThrownBy(() -> useCase.executar(UUID.randomUUID()))
                 .isInstanceOf(RecursoNaoEncontradoException.class);
-    }
-
-    @Test
-    @DisplayName("Nao deve salvar nem notificar ao cancelar OS ja CANCELADA")
-    void naoDeveSalvarNemNotificar_quandoJaCancelada() {
-        OrdemServico os = TestDataFactory.criarOrdemServicoAguardandoAprovacao();
-        os.cancelarPorDesistencia();
-        when(ordemServicoRepository.buscarPorId(any())).thenReturn(Optional.of(os));
-
-        OrdemServico resultado = useCase.executar(os.getId());
-
-        assertThat(resultado.getSituacao()).isEqualTo(SituacaoOrdemServicoEnum.CANCELADA);
-        verify(ordemServicoRepository, never()).salvar(any());
-        verifyNoInteractions(notificacaoUseCase);
-    }
-
-    @Test
-    @DisplayName("Nao deve salvar nem notificar ao cancelar OS ja FINALIZADA")
-    void naoDeveSalvarNemNotificar_quandoJaFinalizada() {
-        OrdemServico os = TestDataFactory.criarOrdemServicoFinalizada();
-        when(ordemServicoRepository.buscarPorId(any())).thenReturn(Optional.of(os));
-
-        assertThatThrownBy(() -> useCase.executar(os.getId()))
-                .isInstanceOf(RegraNegocioException.class);
-
-        verify(ordemServicoRepository, never()).salvar(any());
-        verifyNoInteractions(notificacaoUseCase);
-    }
-
-    @Test
-    @DisplayName("Nao deve salvar nem notificar ao cancelar OS ja ENTREGUE")
-    void naoDeveSalvarNemNotificar_quandoJaEntregue() {
-        OrdemServico os = TestDataFactory.criarOrdemServicoEntregue();
-        when(ordemServicoRepository.buscarPorId(any())).thenReturn(Optional.of(os));
-
-        assertThatThrownBy(() -> useCase.executar(os.getId()))
-                .isInstanceOf(RegraNegocioException.class);
-
-        verify(ordemServicoRepository, never()).salvar(any());
-        verifyNoInteractions(notificacaoUseCase);
+        verifyNoInteractions(orquestradorSaga);
     }
 }

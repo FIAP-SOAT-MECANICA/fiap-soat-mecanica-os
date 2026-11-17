@@ -1,7 +1,8 @@
 # FIAP SOAT - Mecanica do Braia
 
 API REST desenvolvida para gerenciamento de uma oficina mecanica, como parte do
-**Tech Challenge - Fase 2**.
+**Tech Challenge**. Na Fase 4 este repositorio e o **OS Service**, orquestrador da saga
+entre os microsservicos de Execucao e Billing.
 
 ## Problema
 
@@ -43,11 +44,14 @@ O projeto segue uma organizacao inspirada em Clean Architecture e Arquitetura He
 ```text
 src/main/java/br/com/fiap/soat/mecanica
 |-- domain                  -> regras de negocio, entidades, enums, value objects e portas
-|-- application             -> casos de uso da aplicacao
+|-- application             -> casos de uso e orquestrador da saga (application/saga)
 |-- adapters
 |   |-- in/web              -> controllers, DTOs, mappers e filtro de seguranca
+|   |-- in/messaging        -> consumidor SQS da fila de respostas (long polling)
 |   `-- out
-|       |-- persistence     -> entidades JPA, repositories e mappers de persistencia
+|       |-- persistence     -> JPA (cadastros) e JDBC (saga, inbox, outbox)
+|       |-- messaging       -> envelope, publicador SQS e publicador da outbox
+|       |-- historico       -> historico da OS no DynamoDB
 |       |-- notification    -> adapter SMTP para notificacoes por e-mail
 |       `-- security        -> servicos de JWT e criptografia de senha
 `-- config                  -> seguranca, OpenAPI e tratamento global de excecoes
@@ -55,112 +59,111 @@ src/main/java/br/com/fiap/soat/mecanica
 
 ## Principais dominios
 
-- **Usuario:** representa os usuarios autenticados da API.
+Na Fase 4 o monolito foi decomposto em tres microsservicos (ver
+[RFC-002](docs/rfc/RFC-002-decomposicao-os-service.md)). Este repositorio e o **OS Service**:
+
+- **Usuario:** usuarios autenticados da API.
 - **Cliente:** pessoa fisica ou juridica atendida pela oficina.
 - **Veiculo:** veiculo associado a um cliente.
-- **Servico:** tipo de servico executado pela oficina.
-- **Peca:** item de estoque utilizado nos servicos.
-- **Ordem de Servico:** entidade central do fluxo de atendimento.
-- **Prestacao de Servico:** servico incluido em uma ordem de servico.
-- **Alocacao de Peca:** reserva/uso de uma peca em uma prestacao de servico.
+- **Servico:** catalogo de servicos (o Execucao consulta `GET /servicos/{id}`).
+- **Ordem de Servico:** entidade central; o ciclo de vida e conduzido pela saga.
+- **Saga da OS:** instancia do orquestrador, uma por OS (`saga_ordem_servico`).
 
-## Fluxo da Ordem de Servico
+Sairam deste repositorio: pecas, prestacao de servico e alocacao de pecas (servico
+**Execucao**, DynamoDB) e orcamento e pagamento (servico **Billing**, PostgreSQL).
+Nenhum servico acessa o banco de outro.
 
-A Ordem de Servico controla o ciclo de vida do atendimento:
+| Servico | Repositorio | Banco | Papel |
+| --- | --- | --- | --- |
+| OS (este) | `fiap-soat-mecanica-os` | PostgreSQL (RDS) + DynamoDB (historico) | Orquestrador da saga |
+| Execucao | `fiap-soat-mecanica-execucao` | DynamoDB | Diagnostico, estoque, execucao |
+| Billing | `fiap-soat-mecanica-billing` | PostgreSQL | Orcamento e cobranca |
 
-```text
-RECEBIDA
-EM_DIAGNOSTICO
-AGUARDANDO_APROVACAO
-EM_EXECUCAO
-FINALIZADA
-ENTREGUE
-```
+## Saga orquestrada
 
-Fluxo principal:
-
-1. O mecanico abre uma Ordem de Servico ja com servicos e pecas (endpoint consolidado).
-2. A OS sai de `RECEBIDA` para `EM_DIAGNOSTICO`.
-3. O almoxarife aloca pecas adicionais na prestacao, se necessario.
-4. O sistema baixa estoque e soma o valor das pecas no total da OS.
-5. O mecanico envia a OS para aprovacao — o cliente recebe notificacao por e-mail.
-6. O cliente aprova ou recusa o orcamento pelo link recebido no e-mail.
-7. Se aprovado, o mecanico inicia a execucao.
-8. Ao finalizar todas as prestacoes, a OS passa para `FINALIZADA`.
-9. Ao pagar, a OS passa para `ENTREGUE`.
-
-## Abertura consolidada de Ordem de Servico
-
-O endpoint abaixo permite abrir uma OS ja com servicos e pecas em uma unica
-chamada, eliminando a necessidade de multiplas requisicoes:
-
-```http
-POST /ordem-servicos/abrir
-Authorization: Bearer <token-do-mecanico>
-Content-Type: application/json
-```
-
-O acesso e restrito ao perfil `MECANICO`.
-
-Exemplo de corpo:
+O OS e o unico servico que fala com os outros dois. Ele manda **comandos** para a fila SQS
+de cada servico e recebe os **eventos** deles na fila `mecanica-os-respostas`, que assina os
+topicos SNS `mecanica-execucao-eventos` e `mecanica-billing-eventos`. Envelope comum (JSON):
 
 ```json
-{
-  "veiculoId": "44444444-4444-4444-4444-444444444444",
-  "observacao": "Revisao completa",
-  "servicos": [
-    {
-      "servicoId": "55555555-5555-5555-5555-555555555555",
-      "precoMaoDeObra": 150.00,
-      "pecas": [
-        {
-          "pecaId": "66666666-6666-6666-6666-666666666666",
-          "quantidade": 2
-        }
-      ]
-    }
-  ]
-}
+{ "messageId": "uuid", "type": "AbrirDiagnostico", "version": 1, "sagaId": "uuid", "osId": "uuid",
+  "correlationId": "string", "causationId": "uuid", "occurredAt": "2026-11-11T19:00:00Z", "payload": { } }
 ```
 
-| Campo | Obrigatorio | Descricao |
-| --- | --- | --- |
-| `veiculoId` | sim | UUID do veiculo |
-| `observacao` | nao | Observacoes da OS |
-| `servicos` | sim (minimo 1) | Lista de servicos a incluir |
-| `servicos[].servicoId` | sim | UUID do servico |
-| `servicos[].precoMaoDeObra` | sim | Preco da mao de obra (positivo) |
-| `servicos[].pecas` | nao | Lista de pecas a alocar no servico |
-| `servicos[].pecas[].pecaId` | sim | UUID da peca |
-| `servicos[].pecas[].quantidade` | sim | Quantidade (minimo 1) |
+```mermaid
+sequenceDiagram
+    participant M as Mecanico
+    participant OS as OS Service
+    participant EX as Execucao
+    participant BI as Billing
+    M->>OS: POST /ordem-servicos (RECEBIDA)
+    OS->>EX: AbrirDiagnostico
+    EX-->>OS: DiagnosticoAberto (EM_DIAGNOSTICO)
+    EX-->>OS: DiagnosticoConcluido {itens}
+    OS->>BI: GerarOrcamento (AGUARDANDO_APROVACAO)
+    BI-->>OS: OrcamentoAprovado
+    OS->>EX: ReservarPecas {cycleId, pecas}
+    EX-->>OS: PecasReservadas
+    OS->>EX: IniciarExecucao (EM_EXECUCAO)
+    EX-->>OS: ExecucaoFinalizada (FINALIZADA)
+    OS->>BI: SolicitarPagamento
+    BI-->>OS: PagamentoConfirmado (ENTREGUE, saga CONCLUIDA)
+```
 
-A resposta e a OS criada com todas as prestacoes e alocacoes ja vinculadas.
-Valores invalidos ou lista de servicos vazia retornam `400 Bad Request`.
+| # | Passo | OS faz | Espera | Compensacao |
+| --- | --- | --- | --- | --- |
+| 1 | Abertura | grava `RECEBIDA`, cria a saga, envia `AbrirDiagnostico` | `DiagnosticoAberto` | — |
+| 2 | Diagnostico | `EM_DIAGNOSTICO` | `DiagnosticoConcluido` | OS `CANCELADA` |
+| 3 | Orcamento | envia `GerarOrcamento`, `AGUARDANDO_APROVACAO` | `OrcamentoAprovado` | `OrcamentoRecusado`: OS `CANCELADA` |
+| 4 | Reserva | envia `ReservarPecas` | `PecasReservadas` | `ReservaPecasRecusada`: `CancelarOrcamento`, OS fica `AGUARDANDO_APROVACAO` |
+| 5 | Execucao | envia `IniciarExecucao`, `EM_EXECUCAO` | `ExecucaoFinalizada` | desistencia: `LiberarReservaPecas` (Execucao) + `CancelarOrcamento` (Billing) |
+| 6 | Cobranca | `FINALIZADA`, envia `SolicitarPagamento` | `PagamentoConfirmado` | `PagamentoRecusado`: `CancelarCobranca`, OS fica `FINALIZADA` |
+| 7 | Entrega | `ENTREGUE`, saga `CONCLUIDA` | — | — |
 
-## Aprovacao e recusa de orcamento pelo cliente
+A desistencia do cliente (`PATCH /ordem-servicos/{id}/cancelar`) compensa os passos ja feitos
+**em ordem inversa** e registra cada compensacao na saga. No passo 5 isso gera compensacao em
+dois servicos diferentes, o caso que uma transacao de banco nao resolve.
 
-Apos o mecanico enviar a OS para aprovacao, o cliente recebe uma notificacao
-por e-mail. Os endpoints abaixo sao publicos e acessados pelo cliente via link:
+### Garantias de entrega
 
-### Aprovar orcamento
+| Regra | Como |
+| --- | --- |
+| Mudanca de estado e mensagem na mesma transacao | **Outbox** (`outbox`): o orquestrador so grava; o `PublicadorDaOutbox` publica depois do commit, com `FOR UPDATE SKIP LOCKED` |
+| Entrega pelo menos uma vez, efeito uma vez | **Inbox** (`mensagem_processada`): `INSERT ... ON CONFLICT DO NOTHING` na mesma transacao do efeito |
+| Mensagem que falha nao e apagada | o consumidor so apaga depois do commit; 5 falhas levam a DLQ |
+| Eventos fora de ordem | evento de um passo a frente volta para a fila (`EventoForaDeOrdemException`); atrasado ou repetido e ignorado com log |
+| Concorrencia entre replicas | a saga e lida com `SELECT ... FOR UPDATE` |
+| Rastreamento | o `traceparent` W3C e gravado na outbox, vai como atributo SQS e e reativado no consumidor |
+
+### Acompanhar uma OS
 
 ```http
-PATCH /ordem-servicos/{id}/aprovar-orcamento
+GET /ordem-servicos/{id}/saga        -> passo atual, estado, passos concluidos e compensados
+GET /ordem-servicos/{id}/historico   -> transicoes de situacao em ordem cronologica (DynamoDB os-historico)
 ```
 
-Transiciona a OS de `AGUARDANDO_APROVACAO` para `EM_EXECUCAO`.
+As duas rotas exigem perfil `MECANICO`. Para o video, a tabela da saga tambem pode ser vista
+direto no banco:
 
-### Recusar orcamento
-
-```http
-PATCH /ordem-servicos/{id}/recusar-orcamento
+```sql
+SELECT os_id, passo_atual, estado, passos_concluidos, passos_compensados, motivo, atualizado_em
+FROM saga_ordem_servico ORDER BY atualizado_em DESC;
 ```
 
-Transiciona a OS de `AGUARDANDO_APROVACAO` de volta para `EM_DIAGNOSTICO`,
-permitindo que o mecanico revise o orcamento e reenvie para aprovacao.
+### Configuracao da mensageria
 
-Ambos os endpoints nao exigem token JWT. Retornam `404` se a OS nao for
-encontrada e `422` se a OS nao estiver no estado `AGUARDANDO_APROVACAO`.
+| Variavel | Uso |
+| --- | --- |
+| `EXECUCAO_COMMAND_QUEUE_URL` | fila de comandos do Execucao (SSM `/mecanica/execucao/command-queue-url`) |
+| `BILLING_COMMAND_QUEUE_URL` | fila de comandos do Billing (SSM `/mecanica/billing/command-queue-url`) |
+| `OS_RESPONSE_QUEUE_URL` | fila de respostas do OS (SSM `/mecanica/os/response-queue-url`) |
+| `HISTORICO_TABLE_NAME` | tabela DynamoDB do historico (padrao `os-historico`) |
+| `MESSAGING_CONSUMER_ENABLED` | liga o consumidor SQS (padrao `false`) |
+| `MESSAGING_OUTBOX_ENABLED` | liga o publicador da outbox (padrao `false`; desligado, as mensagens ficam pendentes na tabela) |
+
+A infraestrutura (SQS, DLQ, SNS, assinaturas, SSM, DynamoDB, RDS) esta em Terraform em `infra/`
+e e aplicada pelo job `infra` do `cd.yml`. Ordem de deploy em
+[`infra/messaging/README.md`](infra/messaging/README.md).
 
 ## Listagem operacional de ordens de servico
 
@@ -292,16 +295,18 @@ A API utiliza JWT e autorizacao por cargo.
 | Cargo | Responsabilidades principais |
 | --- | --- |
 | `ATENDENTE` | Cadastro e consulta de clientes e veiculos |
-| `MECANICO` | Cadastro de servicos, ordens de servico, prestacoes e fluxo da OS |
-| `ALMOXARIFE` | Cadastro de pecas e alocacao de pecas em prestacoes |
+| `MECANICO` | Cadastro de servicos, abertura e cancelamento de OS, consulta da saga e do historico |
+| `ALMOXARIFE` | Sem rotas neste servico (estoque saiu para o Execucao) |
+
+Servicos internos se autenticam por chave de API (`X-Api-Key`), uma por consumidor, com escopo
+proprio: a Lambda de autenticacao le `GET /clientes/por-cpf/{cpf}/situacao` e o Execucao le
+`GET /servicos/{id}`.
 
 Rotas publicas:
 
 - `POST /usuarios`
 - `POST /auth/login`
 - `GET /ordem-servicos/veiculo/placa/{placa}`
-- `PATCH /ordem-servicos/{id}/aprovar-orcamento`
-- `PATCH /ordem-servicos/{id}/recusar-orcamento`
 - Swagger/OpenAPI
 
 As demais rotas exigem token JWT.
@@ -416,11 +421,12 @@ docker compose up -d postgres mailhog
 
 1. Execute `docker compose up --build -d` e aguarde a API e o PostgreSQL.
 2. Autentique em `POST /auth/login` com um usuario `MECANICO`.
-3. Chame `POST /ordem-servicos/abrir` com veiculo, servicos e pecas para abrir uma OS consolidada.
-4. Execute uma das transicoes existentes para levar a OS ate `AGUARDANDO_APROVACAO`.
-5. Acesse `http://localhost:8025` e confirme assunto, destinatario e conteudo do e-mail enviado.
-6. Chame `PATCH /ordem-servicos/{id}/aprovar-orcamento` sem token e confirme que a OS vai para `EM_EXECUCAO`.
-7. Repita o fluxo e chame `PATCH /ordem-servicos/{id}/recusar-orcamento` para confirmar o retorno a `EM_DIAGNOSTICO`.
+3. Chame `POST /ordem-servicos` com `veiculoId` para abrir uma OS em `RECEBIDA`.
+4. Chame `GET /ordem-servicos/{id}/saga` e confirme o passo `ABERTURA`; na tabela `outbox` ha um
+   `AbrirDiagnostico` pendente (o publicador fica desligado sem AWS).
+5. Para rodar a saga inteira sem AWS, use os cenarios BDD (`./mvnw.cmd test -Dtest=SagaBddTest`).
+6. Chame `PATCH /ordem-servicos/{id}/cancelar` e confirme a saga `CANCELADA`.
+7. Acesse `http://localhost:8025` e confirme o e-mail de mudanca de situacao.
 8. Chame `GET /ordem-servicos?page=0&size=20` com o token do mecanico e confirme o filtro e a ordenacao por situacao.
 9. Consulte `GET /ordem-servicos/veiculo/placa/{placa}` para validar que o fluxo publico por placa continua disponivel.
 10. Ao terminar, execute `docker compose down`.
@@ -591,11 +597,14 @@ Principais tabelas:
 - `usuarios`
 - `clientes`
 - `veiculos`
-- `pecas`
 - `servicos`
 - `ordem_servicos`
-- `prestacao_servicos`
-- `alocacao_pecas`
+- `saga_ordem_servico` (instancia da saga, `V13`)
+- `outbox` (mensagens a publicar, `V12`)
+- `mensagem_processada` (inbox de idempotencia, `V11`)
+
+`pecas`, `prestacao_servicos` e `alocacao_pecas` foram removidas na `V10` (passaram para o
+Execucao). O historico de transicoes fica fora do PostgreSQL, na tabela DynamoDB `os-historico`.
 
 ## Melhorias de Infraestrutura e Testes
 
@@ -636,8 +645,14 @@ O projeto possui testes para:
 - Controllers
 - Mappers
 - Repositories
-- Seguranca/JWT
+- Seguranca/JWT e chave de API
 - Tratamento global de excecoes
+- Mensageria: envelope, publicador e consumidor SQS e historico DynamoDB (LocalStack)
+- Inbox, outbox e saga contra PostgreSQL real (Testcontainers)
+- Propagacao de `traceparent` nas mensagens
+- **BDD (Cucumber)** da saga em `src/test/resources/features/saga-ordem-servico.feature`: caminho
+  feliz, evento duplicado, evento fora de ordem e as compensacoes (sem estoque, desistencia durante a
+  execucao, pagamento recusado, orcamento recusado). Relatorio em `target/cucumber-reports/cucumber.html`
 
 O relatorio de cobertura fica em:
 
@@ -646,6 +661,10 @@ target/site/jacoco/index.html
 ```
 
 Atualmente, o projeto exige cobertura minima de **80%** no `mvn verify`.
+
+Evidencia (2026-11-17, `./mvnw clean verify`): **315 testes, 0 falhas, 94,3% de linhas cobertas**,
+regra do JaCoCo atendida. A CI publica o relatorio JaCoCo (`jacoco-report`) e o do Cucumber
+(`cucumber-report`) como artefatos de cada execucao.
 
 ## Smoke test da API
 
@@ -697,8 +716,15 @@ requests para `main` e `develop`. A pipeline executa:
 
 - Checkout do repositorio
 - Setup do JDK 21
-- `./mvnw clean verify` (build, testes e verificacao de cobertura JaCoCo minima de 80%)
+- `./mvnw clean verify` (build, testes, cenarios BDD e verificacao de cobertura JaCoCo minima de 80%)
+- Publicacao dos relatorios JaCoCo e Cucumber
 - Analise SonarQube quando `SONAR_TOKEN` e `SONAR_HOST_URL` estiverem configurados
+
+No deploy para o EKS, o job `infra` aplica o Terraform de `infra/rds` (se `RDS_VPC_ID` estiver
+definido), `infra/messaging` e `infra/historico` com state no bucket `mecanica-tfstate-<account-id>`,
+e repassa ao `ConfigMap` as URLs das filas e o nome da tabela, ligando o consumidor e o publicador
+da outbox. Variaveis de repositorio: `RDS_VPC_ID`, `RDS_SUBNET_IDS`, `RDS_ALLOWED_SG_ID`,
+`ASSINAR_BILLING`. Secrets opcionais: `API_KEY_AUTH_LAMBDA`, `API_KEY_EXECUCAO`.
 
 Depois de uma CI bem-sucedida em `main`, o CD usa exatamente o
 `workflow_run.head_sha`: publica `ghcr.io/<owner>/<repo>:<sha>`, executa
@@ -725,6 +751,12 @@ As decisoes deste repositorio estao em [`docs/`](docs/README.md):
 - [ADR-009](docs/adr/ADR-009-otel-collector-instrumentation-datadog.md) — OpenTelemetry Collector e Instrumentation exportando para o Datadog
 - [ADR-010](docs/adr/ADR-010-logs-estruturados-request-id.md) — logs estruturados em JSON com `requestId` e eventos de negocio
 - [ADR-011](docs/adr/ADR-011-qualidade-cobertura-sonar-zap.md) — portoes de qualidade: JaCoCo 80%, Testcontainers, SonarQube, ZAP e smoke test
+- [RFC-002](docs/rfc/RFC-002-decomposicao-os-service.md) — decomposicao em OS, Execucao e Billing
+- [ADR-012](docs/adr/ADR-012-saga-orquestrada.md) — saga orquestrada no OS, e nao coreografada
+- [ADR-013](docs/adr/ADR-013-sns-sqs-e-nao-kafka.md) — SNS para eventos e SQS para comandos, e nao Kafka
+- [ADR-014](docs/adr/ADR-014-json-e-nao-avro.md) — JSON com envelope versionado, e nao Avro
+- [ADR-015](docs/adr/ADR-015-historico-em-dynamodb.md) — historico da OS em DynamoDB alimentado pela outbox
+- [ADR-016](docs/adr/ADR-016-inbox-outbox-transacionais.md) — inbox e outbox transacionais no PostgreSQL
 
 A documentacao de dominio (linguagem ubiqua, board DDD, modelo de tabelas) e
 as evidencias de testes e vulnerabilidades continuam em `docs/`.

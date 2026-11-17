@@ -30,6 +30,11 @@ causa da aplicação.
 | [ADR-009](adr/ADR-009-otel-collector-instrumentation-datadog.md) | `OpenTelemetryCollector` (DaemonSet) e `Instrumentation` Java no namespace da API, exportando traces, métricas e logs para o Datadog sem alterar código ou imagem |
 | [ADR-010](adr/ADR-010-logs-estruturados-request-id.md) | Logs JSON (logstash) com `requestId` propagado por `X-Request-Id`, eventos de negócio nomeados e `errorId` na resposta de erro; nenhum segredo ou dado pessoal em log |
 | [ADR-011](adr/ADR-011-qualidade-cobertura-sonar-zap.md) | Portões de qualidade: JaCoCo ≥ 80% no `verify`, Testcontainers com PostgreSQL real, SonarQube na CI, ZAP dinâmico e smoke test funcional |
+| [ADR-012](adr/ADR-012-saga-orquestrada.md) | Saga orquestrada com o orquestrador no OS: instância por OS, evento validado contra o passo atual, compensações em ordem inversa |
+| [ADR-013](adr/ADR-013-sns-sqs-e-nao-kafka.md) | SNS para eventos e SQS para comandos, uma fila de respostas com DLQ; Kafka/MSK rejeitado por custo e operação |
+| [ADR-014](adr/ADR-014-json-e-nao-avro.md) | JSON com envelope versionado e validado no código; Avro rejeitado por falta de registro de schema |
+| [ADR-015](adr/ADR-015-historico-em-dynamodb.md) | Histórico da OS em DynamoDB (PK `osId`, SK `ocorridoEm`), escrito pela outbox com `PutItem` condicional |
+| [ADR-016](adr/ADR-016-inbox-outbox-transacionais.md) | Inbox e outbox transacionais no PostgreSQL, `traceparent` nas mensagens, JDBC para saga/inbox/outbox |
 
 ## Documentação de domínio e evidências
 
@@ -67,4 +72,4 @@ do README principal; a topologia em nuvem detalhada está na
 - **ADR** registra uma decisão já tomada: contexto, decisão, consequências.
   ADRs não são editados depois de aceitos; uma mudança gera um novo ADR que
   substitui o anterior.
-- Numeração sequencial por tipo. Próximos: `RFC-002`, `ADR-012`.
+- Numeração sequencial por tipo. Próximos: `RFC-003`, `ADR-017`.

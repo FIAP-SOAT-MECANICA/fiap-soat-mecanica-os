@@ -24,13 +24,19 @@ lidos aqui com `data`; se não existirem, o `plan` falha. Como a AWS Academy é 
 a ordem vale a cada nova sessão:
 
 ```
-fiap-soat-mecanica-k8s → fiap-soat-mecanica-execucao → fiap-soat-mecanica-os (infra/messaging)
+fiap-soat-mecanica-k8s → fiap-soat-mecanica-execucao + fiap-soat-mecanica-billing → fiap-soat-mecanica-os (infra/messaging)
 ```
 
 ## Billing
 
-Os eventos do Billing vão chegar numa fila própria, com DLQ própria, criada quando o tópico do Billing
-existir. Ela não é criada agora porque o Billing ainda não publica nada.
+O tópico `mecanica-billing-eventos` é assinado **na mesma fila** `mecanica-os-respostas` (revisão da
+decisão anterior de fila separada): o OS tem um único consumidor, uma única inbox e uma única DLQ, e o
+orquestrador roteia pelo `type` do envelope. A política da fila aceita os dois tópicos (`aws:SourceArn`).
+O OS também lê `/mecanica/billing/command-queue-url` para mandar `GerarOrcamento`, `CancelarOrcamento`,
+`SolicitarPagamento` e `CancelarCobranca`.
+
+Com isso o Billing também precisa ter feito o `apply` antes deste módulo. Para aplicar sem ele, use
+`-var assinar_billing=false` (no CD: variável de repositório `ASSINAR_BILLING=false`).
 
 ## Como rodar
 

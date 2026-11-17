@@ -16,6 +16,12 @@ variable "visibility_timeout_seconds" {
   default     = 60
 }
 
+variable "assinar_billing" {
+  description = "Assina o tópico de eventos do Billing na fila de respostas. Exige o apply do Billing antes"
+  type        = bool
+  default     = true
+}
+
 variable "max_receive_count" {
   description = "Tentativas antes de a mensagem ir para a DLQ"
   type        = number

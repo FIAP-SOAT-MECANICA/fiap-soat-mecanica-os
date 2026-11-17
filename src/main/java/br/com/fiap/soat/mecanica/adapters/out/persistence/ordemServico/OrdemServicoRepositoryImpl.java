@@ -27,8 +27,9 @@ public class OrdemServicoRepositoryImpl implements OrdemServicoRepository, Lista
     @Override
     public OrdemServico salvar(OrdemServico ordemServico) {
         OrdemServicoEntity ordemServicoEntity = ordemServicoMapper.toEntity(ordemServico);
-        ordemServicoJpaRepository.save(ordemServicoEntity);
-        return ordemServicoMapper.toDomain(ordemServicoEntity);
+        // flush: a saga (JDBC) tem FK para ordem_servicos e é gravada logo depois, na mesma transação.
+        OrdemServicoEntity salva = ordemServicoJpaRepository.saveAndFlush(ordemServicoEntity);
+        return ordemServicoMapper.toDomain(salva);
     }
 
     @Override

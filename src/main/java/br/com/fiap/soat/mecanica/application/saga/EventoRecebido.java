@@ -9,6 +9,7 @@ public record EventoRecebido(
         String type,
         UUID sagaId,
         UUID osId,
+        String correlationId,
         UUID causationId,
         JsonNode payload
 ) {

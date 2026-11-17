@@ -20,12 +20,21 @@ public record MessageEnvelope(
 
     public static final int VERSAO_SUPORTADA = 1;
 
+    /** Regras do Execução: valem para tudo que o OS envia. */
     public void validar() {
+        exigir(sagaId, "sagaId");
+        validarEntrada();
+    }
+
+    /**
+     * Regras para o que o OS recebe. sagaId pode vir nulo: o Billing ainda não guarda o sagaId
+     * do comando e manda os eventos de orçamento sem ele. O OS localiza a saga pelo osId.
+     */
+    public void validarEntrada() {
         if (version != VERSAO_SUPORTADA) {
             throw new MensagemInvalidaException("Versão de envelope não suportada: " + version);
         }
         exigir(messageId, "messageId");
-        exigir(sagaId, "sagaId");
         exigir(osId, "osId");
         exigir(payload, "payload");
         if (type == null || type.isBlank()) {
