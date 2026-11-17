@@ -6,7 +6,8 @@ public enum SituacaoOrdemServicoEnum {
     AGUARDANDO_APROVACAO("Aguardando aprovação"),
     EM_EXECUCAO("Em execução"),
     FINALIZADA("Finalizada"),
-    ENTREGUE("Entregue");
+    ENTREGUE("Entregue"),
+    CANCELADA("Cancelada");
 
     private final String descricao;
 

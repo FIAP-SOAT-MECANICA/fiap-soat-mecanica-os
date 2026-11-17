@@ -17,7 +17,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -43,8 +42,8 @@ class OrdemServicoRepositoryImplTest extends PostgresIntegrationTest {
     @BeforeEach
     void setUp() {
         jdbcTemplate.execute("""
-                TRUNCATE TABLE alocacao_pecas, prestacao_servicos, ordem_servicos,
-                    veiculos, clientes, pecas, servicos, usuarios CASCADE
+                TRUNCATE TABLE ordem_servicos,
+                    veiculos, clientes, servicos, usuarios CASCADE
                 """);
         DatabaseTestFixtures.OrdemServicoDependencies dependencies =
                 DatabaseTestFixtures.insertOrdemServicoDependencies(jdbcTemplate);
@@ -156,15 +155,14 @@ class OrdemServicoRepositoryImplTest extends PostgresIntegrationTest {
     private void inserirOrdem(UUID id, String status, String situacao, LocalDateTime dataRecebida) {
         jdbcTemplate.update("""
                 INSERT INTO ordem_servicos (
-                    id, status, situacao, data_recebida, pago, valor_total, observacao, veiculo_id, usuario_id
+                    id, status, situacao, data_recebida, observacao, veiculo_id, usuario_id
                 )
-                VALUES (?, ?, ?, ?, FALSE, ?, 'OS listagem', ?, ?)
+                VALUES (?, ?, ?, ?, 'OS listagem', ?, ?)
                 """,
                 id,
                 status,
                 situacao,
                 dataRecebida,
-                BigDecimal.ZERO,
                 veiculoId,
                 usuarioId);
     }

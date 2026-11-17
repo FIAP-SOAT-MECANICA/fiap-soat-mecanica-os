@@ -65,7 +65,7 @@ jobs:
       TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
       TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
       TF_VAR_datadog_api_key: ${{ secrets.DATADOG_API_KEY }}
-      KUBECONFIG: ${{ github.workspace }}/infra/kubeconfig
+      KUBECONFIG: ${{ github.workspace }}/infra/k8s/kubeconfig
 
     steps:
       - name: Checkout the tested commit
@@ -96,24 +96,24 @@ jobs:
           docker pull "$TF_VAR_api_image"
 
       - name: Terraform format check
-        working-directory: infra
+        working-directory: infra/k8s
         run: terraform fmt -check -recursive
 
       - name: Terraform init
         id: terraform-init
-        working-directory: infra
+        working-directory: infra/k8s
         run: terraform init -input=false
 
       - name: Terraform validate
-        working-directory: infra
+        working-directory: infra/k8s
         run: terraform validate
 
       - name: Terraform plan
-        working-directory: infra
+        working-directory: infra/k8s
         run: terraform plan -input=false -out=deploy.tfplan
 
       - name: Terraform apply
-        working-directory: infra
+        working-directory: infra/k8s
         run: terraform apply -input=false -auto-approve deploy.tfplan
 
       - name: Validate cluster and workloads
@@ -184,8 +184,8 @@ jobs:
           fi
 
           grep -E "Flyway|Migrat|schema" <<< "$api_logs" || true
-          grep -Eq "Successfully (applied|validated) 9 migrations" <<< "$api_logs"
-          grep -Eiq 'version[^0-9]*(v)?9' <<< "$api_logs"
+          grep -Eq "Successfully (applied|validated) 13 migrations" <<< "$api_logs"
+          grep -Eiq 'version[^0-9]*(v)?13' <<< "$api_logs"
 
       - name: Run API health check and smoke test
         env:
@@ -198,7 +198,7 @@ jobs:
 
       - name: Terraform destroy
         if: ${{ always() && steps.terraform-init.outcome == 'success' }}
-        working-directory: infra
+        working-directory: infra/k8s
         run: terraform destroy -input=false -auto-approve
 
       - name: Confirm that no Kind container remains
@@ -212,10 +212,91 @@ jobs:
             exit 1
           fi
 
+  infra:
+    name: Terraform (RDS, mensageria, histórico)
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: terraform-os
+      cancel-in-progress: false
+    env:
+      TF_IN_AUTOMATION: "true"
+      AWS_REGION: ${{ vars.AWS_REGION || vars.TF_STATE_REGION || 'us-east-1' }}
+      # RDS: rede vem do repositório -k8s; sem estas variáveis o apply do RDS é pulado.
+      TF_VAR_vpc_id: ${{ vars.RDS_VPC_ID }}
+      TF_VAR_subnet_ids: ${{ vars.RDS_SUBNET_IDS }}
+      TF_VAR_allowed_security_group_id: ${{ vars.RDS_ALLOWED_SG_ID }}
+      TF_VAR_assinar_billing: ${{ vars.ASSINAR_BILLING || 'true' }}
+    outputs:
+      execucao_command_queue_url: ${{ steps.messaging.outputs.execucao_command_queue_url }}
+      billing_command_queue_url: ${{ steps.messaging.outputs.billing_command_queue_url }}
+      response_queue_url: ${{ steps.messaging.outputs.response_queue_url }}
+      historico_table_name: ${{ steps.historico.outputs.historico_table_name }}
+
+    steps:
+      - name: Checkout the tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+          # As URLs das filas contêm o account id; mascarado, o GitHub descarta os outputs do job.
+          mask-aws-account-id: false
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.14.5
+          terraform_wrapper: false
+
+      - name: Resolve the shared state bucket (created by the -k8s repo)
+        id: state
+        shell: bash
+        run: |
+          account_id="$(aws sts get-caller-identity --query Account --output text)"
+          echo "bucket=${{ vars.TF_STATE_BUCKET || 'mecanica-tfstate' }}-$account_id" >> "$GITHUB_OUTPUT"
+
+      - name: Terraform format check
+        run: terraform fmt -check -recursive infra/rds infra/messaging infra/historico
+
+      - name: RDS
+        if: ${{ vars.RDS_VPC_ID != '' }}
+        working-directory: infra/rds
+        run: |
+          terraform init -input=false -backend-config="bucket=${{ steps.state.outputs.bucket }}" -backend-config="region=$AWS_REGION"
+          terraform apply -input=false -auto-approve
+
+      - name: Mensageria (SQS, DLQ, SNS, assinaturas, SSM)
+        id: messaging
+        working-directory: infra/messaging
+        shell: bash
+        run: |
+          terraform init -input=false -backend-config="bucket=${{ steps.state.outputs.bucket }}" -backend-config="region=$AWS_REGION"
+          terraform apply -input=false -auto-approve
+          {
+            echo "execucao_command_queue_url=$(terraform output -raw execucao_command_queue_url)"
+            echo "billing_command_queue_url=$(terraform output -raw billing_command_queue_url)"
+            echo "response_queue_url=$(terraform output -raw response_queue_url)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Histórico (DynamoDB os-historico)
+        id: historico
+        working-directory: infra/historico
+        shell: bash
+        run: |
+          terraform init -input=false -backend-config="bucket=${{ steps.state.outputs.bucket }}" -backend-config="region=$AWS_REGION"
+          terraform apply -input=false -auto-approve
+          echo "historico_table_name=$(terraform output -raw historico_table_name)" >> "$GITHUB_OUTPUT"
+
   deploy-eks:
     name: Deploy to AWS EKS
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    needs: [image, docker]
+    needs: [image, docker, infra]
     runs-on: ubuntu-latest
     concurrency:
       group: deploy-eks
@@ -340,6 +421,9 @@ jobs:
           DB_PASS: ${{ steps.db.outputs.pass }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           AUTH_JWT_SECRET: ${{ steps.auth.outputs.secret }}
+          # Chaves de API dos serviços (2.2). Vazias = fail-closed: a rota recusa todos.
+          API_KEY_AUTH_LAMBDA: ${{ secrets.API_KEY_AUTH_LAMBDA }}
+          API_KEY_EXECUCAO: ${{ secrets.API_KEY_EXECUCAO }}
         run: |
           kubectl create secret generic mecanica-api-secret \
             --namespace "$NAMESPACE" \
@@ -347,6 +431,8 @@ jobs:
             --from-literal=SPRING_DATASOURCE_PASSWORD="$DB_PASS" \
             --from-literal=JWT_SECRET="$JWT_SECRET" \
             --from-literal=AUTH_JWT_SECRET="$AUTH_JWT_SECRET" \
+            --from-literal=API_KEY_AUTH_LAMBDA="$API_KEY_AUTH_LAMBDA" \
+            --from-literal=API_KEY_EXECUCAO="$API_KEY_EXECUCAO" \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Apply API configmap
@@ -354,11 +440,23 @@ jobs:
           DB_HOST: ${{ steps.db.outputs.host }}
           DB_PORT: ${{ steps.db.outputs.port }}
           DB_NAME: ${{ steps.db.outputs.name }}
+          EXECUCAO_COMMAND_QUEUE_URL: ${{ needs.infra.outputs.execucao_command_queue_url }}
+          BILLING_COMMAND_QUEUE_URL: ${{ needs.infra.outputs.billing_command_queue_url }}
+          OS_RESPONSE_QUEUE_URL: ${{ needs.infra.outputs.response_queue_url }}
+          HISTORICO_TABLE_NAME: ${{ needs.infra.outputs.historico_table_name }}
         run: |
+          # Sem credenciais estáticas: o SDK usa o papel do nó (LabRole) pela cadeia padrão.
           kubectl create configmap mecanica-api-config \
             --namespace "$NAMESPACE" \
             --from-literal=SPRING_DATASOURCE_URL="jdbc:postgresql://$DB_HOST:$DB_PORT/$DB_NAME" \
             --from-literal=EMAIL_NOTIFICATIONS_ENABLED=false \
+            --from-literal=AWS_REGION="$AWS_REGION" \
+            --from-literal=EXECUCAO_COMMAND_QUEUE_URL="$EXECUCAO_COMMAND_QUEUE_URL" \
+            --from-literal=BILLING_COMMAND_QUEUE_URL="$BILLING_COMMAND_QUEUE_URL" \
+            --from-literal=OS_RESPONSE_QUEUE_URL="$OS_RESPONSE_QUEUE_URL" \
+            --from-literal=HISTORICO_TABLE_NAME="$HISTORICO_TABLE_NAME" \
+            --from-literal=MESSAGING_CONSUMER_ENABLED=true \
+            --from-literal=MESSAGING_OUTBOX_ENABLED=true \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Apply API service, deployment and HPA
