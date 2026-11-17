@@ -1,6 +1,5 @@
 package br.com.fiap.soat.mecanica.application.servico;
 
-import br.com.fiap.soat.mecanica.domain.exception.RecursoNaoEncontradoException;
 import br.com.fiap.soat.mecanica.domain.servico.Servico;
 import br.com.fiap.soat.mecanica.domain.servico.ServicoRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,10 +12,10 @@ import java.util.UUID;
 public class InativarServicoUseCase {
 
     private final ServicoRepository servicoRepository;
+    private final BuscarServicoPorIdUseCase buscarServicoPorIdUseCase;
 
     public Servico executar(UUID id) {
-        Servico servico = servicoRepository.buscarPorId(id)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Serviço não encontrado"));
+        Servico servico = buscarServicoPorIdUseCase.executar(id);
 
         servico.inativar();
 

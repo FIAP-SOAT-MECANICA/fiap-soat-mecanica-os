@@ -5,6 +5,7 @@ import br.com.fiap.soat.mecanica.adapters.in.web.servico.dto.ServicoResponse;
 import br.com.fiap.soat.mecanica.adapters.in.web.servico.mapper.ServicoResponseMapper;
 import br.com.fiap.soat.mecanica.application.servico.AlterarServicoUseCase;
 import br.com.fiap.soat.mecanica.application.servico.AtivarServicoUseCase;
+import br.com.fiap.soat.mecanica.application.servico.BuscarServicoPorIdUseCase;
 import br.com.fiap.soat.mecanica.application.servico.CadastrarServicoUseCase;
 import br.com.fiap.soat.mecanica.application.servico.InativarServicoUseCase;
 import br.com.fiap.soat.mecanica.domain.servico.Servico;
@@ -26,6 +27,7 @@ public class ServicoController {
     private final AlterarServicoUseCase alterarServicoUseCase;
     private final AtivarServicoUseCase ativarServicoUseCase;
     private final InativarServicoUseCase inativarServicoUseCase;
+    private final BuscarServicoPorIdUseCase buscarServicoPorIdUseCase;
 
     @PostMapping
     @PreAuthorize("hasRole('MECANICO')")
@@ -71,6 +73,15 @@ public class ServicoController {
     public ResponseEntity<ServicoResponse> inativar(@PathVariable UUID id) {
         return ResponseEntity.ok(
                 ServicoResponseMapper.toResponse(inativarServicoUseCase.executar(id))
+        );
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('SCOPE_servicos:ler') or hasRole('MECANICO')")
+    @Operation(summary = "Buscar um serviço por Id")
+    public ResponseEntity<ServicoResponse> buscarPorId(@PathVariable UUID id) {
+        return ResponseEntity.ok(
+                ServicoResponseMapper.toResponse(buscarServicoPorIdUseCase.executar(id))
         );
     }
 }

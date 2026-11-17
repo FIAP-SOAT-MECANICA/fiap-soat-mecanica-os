@@ -1,6 +1,5 @@
 package br.com.fiap.soat.mecanica.application.servico;
 
-import br.com.fiap.soat.mecanica.domain.exception.RecursoNaoEncontradoException;
 import br.com.fiap.soat.mecanica.domain.exception.RegraNegocioException;
 import br.com.fiap.soat.mecanica.domain.servico.Servico;
 import br.com.fiap.soat.mecanica.domain.servico.ServicoRepository;
@@ -13,6 +12,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AlterarServicoUseCase {
 
+    private final BuscarServicoPorIdUseCase buscarServicoPorIdUseCase;
     private final ServicoRepository servicoRepository;
 
     public Servico executar(UUID id, String nome, String descricao) {
@@ -23,8 +23,7 @@ public class AlterarServicoUseCase {
                     throw new RegraNegocioException("Serviço com esse nome já existe");
                 });
 
-        Servico servico = servicoRepository.buscarPorId(id)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Serviço não existe"));
+        Servico servico = buscarServicoPorIdUseCase.executar(id);
 
         servico.alterar(nome, descricao);
         return servicoRepository.salvar(servico);

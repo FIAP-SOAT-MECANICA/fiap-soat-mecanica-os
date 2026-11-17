@@ -1,6 +1,7 @@
 package br.com.fiap.soat.mecanica.application.ordemServico.usecase;
 
 import br.com.fiap.soat.mecanica.adapters.in.web.security.CurrentUserProvider;
+import br.com.fiap.soat.mecanica.application.saga.OrquestradorSaga;
 import br.com.fiap.soat.mecanica.domain.enums.CargoEnum;
 import br.com.fiap.soat.mecanica.domain.exception.RegraNegocioException;
 import br.com.fiap.soat.mecanica.domain.ordemServico.OrdemServico;
@@ -19,6 +20,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -31,6 +33,8 @@ class CadastrarOrdemServicoUseCaseTest {
     private CurrentUserProvider currentUser;
     @Mock
     private NotificarAlteracaoSituacaoOrdemServicoUseCase notificacaoUseCase;
+    @Mock
+    private OrquestradorSaga orquestradorSaga;
     @InjectMocks
     private CadastrarOrdemServicoUseCase useCase;
 
@@ -48,6 +52,7 @@ class CadastrarOrdemServicoUseCaseTest {
 
         // Assert
         assertThat(resultado).isNotNull();
+        verify(orquestradorSaga).iniciar(os); // passo 1 da saga na mesma transação
         verifyNoInteractions(notificacaoUseCase);
     }
 

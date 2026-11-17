@@ -7,7 +7,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -49,12 +48,6 @@ public class OrdemServicoEntity extends PrincipalEntity {
 
     @Column(name = "data_entregue")
     private LocalDateTime dataEntregue;
-
-    @Column(name = "pago")
-    private Boolean pago;
-
-    @Column(name = "valor_total", nullable = false)
-    private BigDecimal valorTotal;
 
     @Column(name = "observacao")
     private String observacao;

@@ -26,13 +26,15 @@ class InativarServicoUseCaseTest {
     private ServicoRepository servicoRepository;
     @InjectMocks
     private InativarServicoUseCase useCase;
+    @Mock
+    private BuscarServicoPorIdUseCase buscarServicoPorIdUseCase;
 
     @Test
     @DisplayName("Deve inativar serviço com sucesso")
     void deveInativar_quandoServicoExiste() {
         // Arrange
         Servico servico = TestDataFactory.criarServicoValido();
-        when(servicoRepository.buscarPorId(any())).thenReturn(Optional.of(servico));
+        when(buscarServicoPorIdUseCase.executar(any())).thenReturn(servico);
         when(servicoRepository.salvar(any())).thenReturn(servico);
 
         // Act
@@ -45,7 +47,7 @@ class InativarServicoUseCaseTest {
     @Test
     @DisplayName("Deve lançar exceção quando serviço não encontrado")
     void deveLancarExcecao_quandoNaoEncontrado() {
-        when(servicoRepository.buscarPorId(any())).thenReturn(Optional.empty());
+        when(buscarServicoPorIdUseCase.executar(any())).thenThrow(new RecursoNaoEncontradoException("Serviço não encontrado"));
         assertThatThrownBy(() -> useCase.executar(UUID.randomUUID()))
                 .isInstanceOf(RecursoNaoEncontradoException.class);
     }

@@ -3,6 +3,7 @@ package br.com.fiap.soat.mecanica.adapters.in.web.cliente;
 import br.com.fiap.soat.mecanica.adapters.in.web.cliente.dto.ClienteAlterarRequest;
 import br.com.fiap.soat.mecanica.adapters.in.web.cliente.dto.ClienteIncluirRequest;
 import br.com.fiap.soat.mecanica.adapters.in.web.cliente.dto.ClienteResponse;
+import br.com.fiap.soat.mecanica.adapters.in.web.cliente.dto.ClienteSituacaoResponse;
 import br.com.fiap.soat.mecanica.adapters.in.web.cliente.mapper.ClienteResponseMapper;
 import br.com.fiap.soat.mecanica.application.cliente.usecase.*;
 import br.com.fiap.soat.mecanica.domain.cliente.Cliente;
@@ -63,6 +64,14 @@ public class ClienteController {
         Cliente cliente = buscarClientePorCpfUseCase.executar(cpf);
 
         return ResponseEntity.ok(ClienteResponseMapper.toResponse(cliente));
+    }
+
+    @GetMapping("/por-cpf/{cpf}/situacao")
+    @PreAuthorize("hasAuthority('SCOPE_clientes:situacao:ler')")
+    @Operation(summary = "Situação do cliente por CPF (uso interno: Lambda de autenticação)")
+    public ResponseEntity<ClienteSituacaoResponse> buscarSituacaoPorCpf(@PathVariable String cpf) {
+        Cliente cliente = buscarClientePorCpfUseCase.executar(cpf);
+        return ResponseEntity.ok(new ClienteSituacaoResponse(cliente.getId(), cliente.getStatus()));
     }
 
     @GetMapping("/por-cnpj/{cnpj}")

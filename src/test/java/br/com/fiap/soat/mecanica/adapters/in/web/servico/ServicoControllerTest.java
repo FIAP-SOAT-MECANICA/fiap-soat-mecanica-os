@@ -2,27 +2,38 @@ package br.com.fiap.soat.mecanica.adapters.in.web.servico;
 
 import br.com.fiap.soat.mecanica.adapters.in.web.security.CustomUserDetailsService;
 import br.com.fiap.soat.mecanica.adapters.out.security.JwtService;
-import br.com.fiap.soat.mecanica.application.servico.*;
+import br.com.fiap.soat.mecanica.application.servico.AlterarServicoUseCase;
+import br.com.fiap.soat.mecanica.application.servico.AtivarServicoUseCase;
+import br.com.fiap.soat.mecanica.application.servico.BuscarServicoPorIdUseCase;
+import br.com.fiap.soat.mecanica.application.servico.CadastrarServicoUseCase;
+import br.com.fiap.soat.mecanica.application.servico.InativarServicoUseCase;
+import br.com.fiap.soat.mecanica.config.SecurityConfig;
+import br.com.fiap.soat.mecanica.domain.exception.RecursoNaoEncontradoException;
 import br.com.fiap.soat.mecanica.domain.servico.Servico;
 import br.com.fiap.soat.mecanica.util.TestDataFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(value = ServicoController.class, excludeAutoConfiguration = UserDetailsServiceAutoConfiguration.class)
+@Import(SecurityConfig.class)
 class ServicoControllerTest {
 
     @Autowired
@@ -39,6 +50,9 @@ class ServicoControllerTest {
     private JwtService jwtService;
     @MockitoBean
     private CustomUserDetailsService userDetailsService;
+    @MockitoBean
+    private BuscarServicoPorIdUseCase buscarServicoPorIdUseCase;
+
 
     @Test
     @WithMockUser(roles = "MECANICO")
@@ -94,5 +108,59 @@ class ServicoControllerTest {
 
         mockMvc.perform(patch("/servicos/{id}/inativar", servico.getId()).with(csrf()))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(roles = "MECANICO")
+    @DisplayName("Deve buscar serviço por Id")
+    void  deveBuscar_quandoId() throws Exception {
+        Servico servico = TestDataFactory.criarServicoValido();
+        when(buscarServicoPorIdUseCase.executar(any())).thenReturn(servico);
+
+        mockMvc.perform(get("/servicos/{id}", servico.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(servico.getId().toString()))
+                .andExpect(jsonPath("$.nome").value("Troca de Óleo"))
+                .andExpect(jsonPath("$.statusRecursoEnum").value("ATIVO"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "SCOPE_servicos:ler")
+    @DisplayName("Deve buscar serviço por Id com o escopo do Execução")
+    void deveBuscar_quandoEscopoServicosLer() throws Exception {
+        Servico servico = TestDataFactory.criarServicoValido();
+        when(buscarServicoPorIdUseCase.executar(any())).thenReturn(servico);
+
+        mockMvc.perform(get("/servicos/{id}", servico.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nome").value("Troca de Óleo"))
+                .andExpect(jsonPath("$.statusRecursoEnum").value("ATIVO"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "SCOPE_clientes:situacao:ler")
+    @DisplayName("Deve negar busca de serviço para o escopo da Lambda")
+    void deveNegar_quandoEscopoDeOutroServico() throws Exception {
+        mockMvc.perform(get("/servicos/{id}", UUID.randomUUID()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "MECANICO")
+    @DisplayName("Deve retornar 404 quando serviço não existe")
+    void deveRetornar404_quandoServicoNaoExiste() throws Exception {
+        when(buscarServicoPorIdUseCase.executar(any())).
+            thenThrow(new RecursoNaoEncontradoException("Serviço não encontrado"));
+
+        mockMvc.perform(get("/servicos/{id}", UUID.randomUUID()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @WithMockUser(roles = "ATENDENTE")
+    @DisplayName("Deve negar busca de serviço quando role não é MECANICO")
+    void deveNegar_quandoRoleNaoMecanico() throws Exception {
+        mockMvc.perform(get("/servicos/{id}", UUID.randomUUID()))
+                .andExpect(status().isForbidden());
     }
 }

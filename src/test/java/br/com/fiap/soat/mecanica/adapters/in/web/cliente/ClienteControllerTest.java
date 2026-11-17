@@ -5,6 +5,7 @@ import br.com.fiap.soat.mecanica.adapters.out.security.JwtService;
 import br.com.fiap.soat.mecanica.application.cliente.usecase.*;
 import br.com.fiap.soat.mecanica.config.SecurityConfig;
 import br.com.fiap.soat.mecanica.domain.cliente.Cliente;
+import br.com.fiap.soat.mecanica.domain.exception.RecursoNaoEncontradoException;
 import br.com.fiap.soat.mecanica.util.TestDataFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -76,6 +77,50 @@ class ClienteControllerTest {
 
         mockMvc.perform(get("/clientes/por-cpf/{cpf}", "52998224725"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(authorities = "SCOPE_clientes:situacao:ler")
+    @DisplayName("Deve devolver só id e status do cliente para quem tem o escopo de situação")
+    void deveBuscarSituacaoPorCpf_quandoEscopoSituacao() throws Exception {
+        Cliente cliente = TestDataFactory.criarClienteComCpf();
+        when(buscarCpfUseCase.executar(anyString())).thenReturn(cliente);
+
+        mockMvc.perform(get("/clientes/por-cpf/{cpf}/situacao", "52998224725"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(cliente.getId().toString()))
+                .andExpect(jsonPath("$.status").value(cliente.getStatus().name()))
+                .andExpect(jsonPath("$.nome").doesNotExist())
+                .andExpect(jsonPath("$.cpf").doesNotExist())
+                .andExpect(jsonPath("$.email").doesNotExist())
+                .andExpect(jsonPath("$.telefone").doesNotExist());
+    }
+
+    @Test
+    @WithMockUser(authorities = "SCOPE_clientes:situacao:ler")
+    @DisplayName("Deve retornar 404 na situação quando o CPF não existe")
+    void deveRetornar404NaSituacao_quandoCpfNaoExiste() throws Exception {
+        when(buscarCpfUseCase.executar(anyString()))
+                .thenThrow(new RecursoNaoEncontradoException("Cliente não encontrado"));
+
+        mockMvc.perform(get("/clientes/por-cpf/{cpf}/situacao", "52998224725"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @WithMockUser(authorities = "SCOPE_servicos:ler")
+    @DisplayName("Deve negar a situação do cliente para o escopo do Execução")
+    void deveNegarSituacao_quandoEscopoDeOutroServico() throws Exception {
+        mockMvc.perform(get("/clientes/por-cpf/{cpf}/situacao", "52998224725"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "ATENDENTE")
+    @DisplayName("Deve negar a situação do cliente para usuário interno sem o escopo")
+    void deveNegarSituacao_quandoAtendente() throws Exception {
+        mockMvc.perform(get("/clientes/por-cpf/{cpf}/situacao", "52998224725"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
